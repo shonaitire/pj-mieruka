@@ -251,10 +251,11 @@ function renderLogin() {
       var f = L.reg || {}, pk = picker('rg', f.depts || [], f.kakaris || [], S.pub.org);
       body = '<div class="form one"><label class="req">メールアドレス</label><input id="rg-email" type="email" value="' + esc(f.email || '') + '">' +
         '<label class="req">名前</label><input id="rg-name" value="' + esc(f.name || '') + '" placeholder="例：小林志季">' +
-        '<label class="req">役職</label><select id="rg-role"><option value=""></option>' + S.pub.roles.map(function (r) { return '<option' + (r === f.role ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select>' +
-        '<label class="req">課（兼務している課は全部押す）</label>' + pk[0] +
+        '<label class="req">役職</label><select id="rg-role"><option value=""></option>' + S.pub.roles.map(function (r) { return '<option value="' + r + '"' + (r === f.role ? ' selected' : '') + '>' + r + (r === '社外コンサル' ? '（社外）' : r === '外部企業' ? '（取引先の方）' : '') + '</option>'; }).join('') + '</select>' +
+        '<div id="rg-in" class="form one" style="padding:0"><label class="req">課（兼務している課は全部押す）</label>' + pk[0] +
         '<label>係（あれば）</label>' + pk[1] + '</div>' +
-        '<p class="muted">パート・アルバイトの方は役職「一般」を選んでください。申請すると、管理者が内容を確かめて許可します。</p>' +
+        '<div id="rg-out" class="form one" style="padding:0"><label class="req">会社名</label><input id="rg-company" value="' + esc(f.company || '') + '" placeholder="例：株式会社〇〇"></div></div>' +
+        '<p class="muted">パート・アルバイトの方は役職「一般」を選んでください。社外の方は「社外コンサル」か「外部企業」を選んでください。申請すると、管理者が内容を確かめて許可します（外部企業の方は、許可された後に担当のプロジェクトだけ見られます）。</p>' +
         '<div class="msg" id="lg-msg"></div><button class="btn primary" id="rg-send" style="width:100%">確認コードを送って申請へ進む</button>';
     }
   } else if (L.step === 2) {
@@ -286,9 +287,9 @@ function renderLogin() {
     $('lg-code').onkeydown = function (e) { if (e.key === 'Enter') $('lg-verify').click(); };
   }
   if ($('rg-send')) $('rg-send').onclick = function () {
-    var f = { email: $('rg-email').value.trim(), name: $('rg-name').value.trim(), role: $('rg-role').value, depts: checked('rg-d'), kakaris: checkedK('rg-k') };
+    var f = { email: $('rg-email').value.trim(), name: $('rg-name').value.trim(), role: $('rg-role').value, depts: checked('rg-d'), kakaris: checkedK('rg-k'), company: $('rg-company').value.trim() };
     S.login.reg = f;
-    busy(true); run('registerRequest', { email: f.email, name: f.name, role: f.role, depts: f.depts.join(','), kakaris: f.kakaris.join(',') }).then(function (r) {
+    busy(true); run('registerRequest', { email: f.email, name: f.name, role: f.role, depts: f.depts.join(','), kakaris: f.kakaris.join(','), company: f.company }).then(function (r) {
       busy(false); if (!r.ok) { $('lg-msg').textContent = r.msg; return; } S.login.step = 2; S.login.email = f.email; renderLogin(); $('rg-code').focus();
     }).catch(fail);
   };
@@ -298,6 +299,11 @@ function renderLogin() {
     }).catch(fail);
   };
   bindPickers($('app'));
+  if ($('rg-role')) {
+    var outs = S.pub.rolesOutside || ['社外コンサル', '外部企業'];
+    var sw = function () { var o = outs.indexOf($('rg-role').value) >= 0; $('rg-in').style.display = o ? 'none' : ''; $('rg-out').style.display = o ? '' : 'none'; };
+    $('rg-role').onchange = sw; sw();
+  }
 }
 // 課と係の選び方：課はグループごとのボタン、係は選んだ課のものだけ出す
 function picker(pfx, selD, selK, org) {
@@ -345,6 +351,7 @@ function items() { return S.st.items; }
 function byId(id) { return items().filter(function (i) { return i.id === id; })[0]; }
 function kids(id) { return items().filter(function (i) { return i.parentId === id; }).sort(function (a, b) { return a.order - b.order; }); }
 function pjs() { return items().filter(function (i) { return i.type === 'PJ'; }); }
+function memberOf(e) { return S.st.members.filter(function (x) { return x.email === String(e).toLowerCase(); })[0]; }
 function memName(e) { var m = S.st.members.filter(function (x) { return x.email === String(e).toLowerCase(); })[0]; return m ? m.name : e; }
 function names(list) { return (list || []).map(memName); }
 function chips(list) { return names(list).map(function (n) { return '<span class="chip">' + esc(n) + '</span>'; }).join(''); }
@@ -385,8 +392,11 @@ function buildCols(fromYm, toYm, mode) {
 function render() {
   if (!S.token || !S.st) return renderLogin();
   var st = S.st, pend = st.members.filter(function (m) { return m.status === '申請中'; }).length;
-  var tabs = [['vc', 'VCマップ'], ['qv', '全PJ一覧（早見表）'], ['gantt', 'PJのガント'], ['mine', '自分のタスク'], ['bn', 'ボトルネック']];
+  var company = st.me.role === '外部企業';
+  var tabs = company ? [['qv', '担当のプロジェクト'], ['gantt', 'PJのガント'], ['mine', '自分のタスク']] :
+    [['vc', 'VCマップ'], ['qv', '全PJ一覧（早見表）'], ['gantt', 'PJのガント'], ['mine', '自分のタスク'], ['bn', 'ボトルネック']];
   if (st.can.admin) tabs.push(['mem', 'メンバー' + (pend ? '<span class="badge">申請' + pend + '</span>' : '')]);
+  if (!tabs.some(function (t) { return t[0] === S.tab; })) S.tab = tabs[0][0];
   var viewSel = '';
   if (st.isOwner) {
     viewSel = '<label title="テスト用：別のメンバーの見え方・権限で表示">表示：<select id="viewas"><option value="">自分（' + esc(st.realMe.name) + '）</option>' +
@@ -575,8 +585,11 @@ function renderGantt(el) {
     '<div class="info"><span>VC <b>' + esc(pj.vc) + '</b></span><span>' + esc(pj.group) + '／<b>' + esc(pj.dept) + '</b>' + (pj.kakari ? '／' + esc(pj.kakari) : '') + '</span><span>No <b>' + esc(pj.no) + '</b></span>' +
     '<span>PJリーダー <b>' + esc(memName(pj.leader)) + '</b></span><span>期限 <b>' + fmtY(pj.deadline) + '</b></span><span>進捗 <b>' + pj.c.progress + '%</b>（タスク ' + pj.c.done + '/' + pj.c.leaves + ' 完了）</span></div>' +
     '<div class="info"><span>解消するボトルネック：</span>' + bnOfPj(pj.id).map(function (b) { return '<span class="chip">' + esc(bnLabel(b)) + '｜' + esc(b.title) + '</span>'; }).join('') +
-    (full ? '<a class="alink" id="g-links">直す</a>' : '') + '</div></div>' +
-    '<div style="display:flex;flex-direction:column;gap:8px">' + (full ? '<button class="btn" id="g-edit">PJの情報を直す</button><button class="btn" id="g-add">＋工程を足す</button><button class="btn danger" id="g-del">PJを消す</button>' : '<span class="muted">' + (pj.edit === 'own' ? '自分の担当の行だけ直せます' : '見るだけ（直す権限がありません）') + '</span>') + '</div></div>' +
+    (full ? '<a class="alink" id="g-links">直す</a>' : '') + '</div>' +
+    '<div class="info"><span>PJメンバー（課外・社外）：</span>' + (pj.members.length ? pj.members.map(function (e) { var m = memberOf(e); return '<span class="chip">' + esc(m ? m.name + (m.outside ? '（' + (m.group || m.role) + '）' : '（' + (m.depts[0] || m.role) + '）') : e) + '</span>'; }).join('') : '<span class="muted">なし</span>') +
+    (full ? '<a class="alink" id="g-members">直す</a>' : '') + '</div></div>' +
+    '<div style="display:flex;flex-direction:column;gap:8px">' + (full ? '<button class="btn" id="g-edit">PJの情報を直す</button><button class="btn" id="g-add">＋工程を足す</button><button class="btn danger" id="g-del">PJを消す</button>' :
+      (pj.canAdd ? '<button class="btn" id="g-add">＋工程を足す</button><span class="muted">PJメンバーとして、工程・タスクを入力できます</span>' : '<span class="muted">' + (descAll(pj.id).some(function (x) { return x.edit === 'own'; }) ? '自分の担当の行だけ直せます' : '見るだけ（直す権限がありません）') + '</span>')) + '</div></div>' +
     '<div class="legend"><span><i style="background:var(--bar)"></i>工程（子から自動）</span><span><i style="background:var(--bar-leaf)"></i>タスク</span><span><i style="background:var(--bar-end)"></i>期限' + (mode === 'week' ? 'の週' : 'の日') + '</span><span><i style="background:#E07A66"></i>遅れ</span><span><i style="box-shadow:inset 2px 0 0 var(--today);background:#fff;border:1px solid var(--line)"></i>今日</span>' +
     '<span>' + (mode === 'week' ? '週：1W=1〜7日・2W=8〜14日・3W=15〜21日・4W=22日〜月末。' : '') + 'タスクの行のマスを押すと、開始・期限がそこまで伸びます。左へ動かすと過去も見られます。</span></div>';
   var monthHead = [];
@@ -603,13 +616,17 @@ function scrollToNow() {
 function descAll(id) { var out = []; kids(id).forEach(function (k) { out.push(k); out = out.concat(descAll(k.id)); }); return out; }
 function rowHtml(it, lv, cols, pj, info, lefts) {
   var ch = kids(it.id), open = lv === 0 || S.exp[it.id] !== false;
-  var c = it.c, full = it.edit === 'full', own = it.edit === 'own', leaf = ch.length === 0 && it.type !== 'PJ', today = S.st.today;
+  // full＝全部／member＝PJメンバー（PJ自体以外の行を直せる）／own＝自分の担当の行
+  var c = it.c, own = it.edit === 'own', full = it.edit === 'full' || (it.edit === 'member' && lv > 0), leaf = ch.length === 0 && it.type !== 'PJ', today = S.st.today;
   var canDate = leaf && (full || own);
   function cell(i, inner, cls) { return '<td class="stk' + (i === info.length - 1 ? ' lastinfo' : '') + (cls ? ' ' + cls : '') + '" style="left:' + lefts[i] + 'px;min-width:' + info[i][1] + 'px;max-width:' + info[i][1] + 'px">' + inner + '</td>'; }
   var acts = '';
   if (lv > 0 && (full || own)) {
-    acts = '<span class="acts">' + (full ? '<button data-a="add" data-id="' + it.id + '" title="下に子を足す">＋子</button><button data-a="up" data-id="' + it.id + '" title="上へ">↑</button><button data-a="down" data-id="' + it.id + '" title="下へ">↓</button>' : '') +
-      '<button data-a="detail" data-id="' + it.id + '" title="完了の条件・振り返り・メモ">詳細</button>' + (full ? '<button data-a="del" data-id="' + it.id + '" title="消す">✕</button>' : '') + '</span>';
+    var mineRow = String(it.createdBy || '').indexOf(S.st.me.email) === 0 && !ch.length;
+    var canDel = it.edit === 'full' || mineRow;
+    acts = '<span class="acts">' + (it.canAdd ? '<button data-a="add" data-id="' + it.id + '" title="下に子を足す（細かく分ける）">＋子</button>' : '') +
+      (full ? '<button data-a="up" data-id="' + it.id + '" title="上へ">↑</button><button data-a="down" data-id="' + it.id + '" title="下へ">↓</button>' : '') +
+      '<button data-a="detail" data-id="' + it.id + '" title="完了の条件・振り返り・メモ">詳細</button>' + (canDel ? '<button data-a="del" data-id="' + it.id + '" title="消す">✕</button>' : '') + '</span>';
   }
   var name = '<div class="nmw" style="padding-left:' + (lv * 18) + 'px">' + (ch.length ? '<span class="tg" data-tg="' + it.id + '">' + (open ? '▾' : '▸') + '</span>' : '<span class="tg"></span>') +
     '<span class="tx' + (full && lv > 0 ? ' ed' : '') + '"' + (full && lv > 0 ? ' data-ename="' + it.id + '"' : '') + (lv < 2 ? ' style="font-weight:700"' : '') + '>' + esc(lv === 0 ? 'PJ全体：' + it.name : it.name) + '</span>' + acts + '</div>';
@@ -645,6 +662,7 @@ function bindGantt(el, pj, cols) {
   if ($('g-add')) $('g-add').onclick = function () { call('addChild', { parentId: pj.id, name: '新しい工程' }); };
   if ($('g-del')) $('g-del').onclick = function () { if (confirm('「' + pj.name + '」を消します。中の工程・タスクも全部消えます。よろしいですか？')) call('deleteItem', { id: pj.id }).then(function () { S.pjId = ''; }); };
   if ($('g-links')) $('g-links').onclick = function () { linkForm(pj); };
+  if ($('g-members')) $('g-members').onclick = function () { pjMembersForm(pj); };
   el.querySelectorAll('[data-tg]').forEach(function (t) { t.onclick = function () { var id = t.dataset.tg; S.exp[id] = S.exp[id] === false; renderGantt(el); }; });
   el.querySelectorAll('[data-ename]').forEach(function (sp) {
     sp.onclick = function () {
@@ -734,17 +752,22 @@ function renderMembers(el) {
   var st = S.st;
   var pend = st.members.filter(function (m) { return m.status === '申請中'; }).sort(function (a, b) { return (a.appliedAt || '').localeCompare(b.appliedAt || ''); });
   var rest = st.members.filter(function (m) { return m.status !== '申請中'; });
-  var html = '<h2>メンバー</h2><p class="lead">役職で権限が決まります。取締役・執行役員・部長＝全部（管理者）／課長＝自分の課／係長＝自分の係／主任・エキスパート・一般＝自分のタスク。見られる範囲は、係長以上＝全PJ、それ以外＝自部署と自分が担当のPJ。部長以上の役職の許可・変更は、取締役か小林部長だけができます。</p>';
+  var html = '<h2>メンバー</h2><p class="lead">役職で権限が決まります。取締役・執行役員・部長＝全部（管理者）／課長・係長＝自分の課／主任・エキスパート・一般＝自分のタスク（下に細かく分けられる）／社外コンサル＝全部見えるが直せない／外部企業＝メンバーに入ったPJだけ見えて入力できる。見られる範囲は、係長以上と社外コンサル＝全PJ、それ以外＝自部署と自分が担当・メンバーのPJ。部長以上と社外コンサルの許可・変更は、取締役か小林部長だけができます。</p>';
   html += '<h2 style="font-size:16px">申請（' + pend.length + '件）</h2>';
   if (!pend.length) html += '<p class="muted">新しい申請はありません。</p>';
+  var allPj = pjs();
   pend.forEach(function (m, n) {
-    var top = st.rolesTop.indexOf(m.role) >= 0;
+    var top = (st.rolesNeedTop || st.rolesTop).indexOf(m.role) >= 0;
     html += '<div class="app-card" data-app="' + esc(m.email) + '"><div class="form">' +
       '<label>メール</label><div><b>' + esc(m.email) + '</b> <span class="muted">申請 ' + esc(jst(m.appliedAt)) + '</span></div>' +
       '<label>名前</label><input class="ap-name" value="' + esc(m.name) + '">' +
       '<label>役職</label><select class="ap-role">' + st.roles.map(function (r) { return '<option' + (r === m.role ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select>' +
-      '<label>課</label>' + picker('ap' + n, m.depts, m.kakaris, st.org)[0] + '<label>係</label>' + picker('ap' + n, m.depts, m.kakaris, st.org)[1] + '</div>' +
-      (top && !st.can.approveTop ? '<p class="late-tag">部長以上の役職での申請です。許可できるのは取締役か小林部長だけです（役職を直せば、あなたも許可できます）。</p>' : '') +
+      (m.outside ?
+        '<label>会社名</label><input class="ap-company" value="' + esc(m.group) + '">' +
+        '<label>見られるPJ</label><div class="checks">' + allPj.map(function (p) { return '<label><input type="checkbox" class="ap' + n + '-pj" value="' + p.id + '"><span>' + esc(p.dept) + '｜' + esc(p.name) + '</span></label>'; }).join('') + '</div>' :
+        '<label>課</label>' + picker('ap' + n, m.depts, m.kakaris, st.org)[0] + '<label>係</label>' + picker('ap' + n, m.depts, m.kakaris, st.org)[1]) + '</div>' +
+      (m.outside && m.role === '外部企業' ? '<p class="muted">外部企業の方は、ここでチェックしたPJだけ見られて、工程・タスクを入力できます（あとからPJのガントの「PJメンバー」でも足せます）。</p>' : '') +
+      (top && !st.can.approveTop ? '<p class="late-tag">部長以上・社外コンサルの申請です。許可できるのは取締役か小林部長だけです。</p>' : '') +
       '<div class="mbtns"><button class="btn danger" data-rej="' + n + '">却下</button><button class="btn primary" data-ok="' + n + '">直した内容で許可</button></div></div>';
   });
   html += '<h2 style="font-size:16px;margin-top:20px">登録済み</h2><div class="toolbar"><button class="btn" id="m-new">＋メンバーを直接足す</button></div>' +
@@ -757,7 +780,10 @@ function renderMembers(el) {
   el.querySelectorAll('[data-ok]').forEach(function (b) {
     b.onclick = function () {
       var n = b.dataset.ok, m = pend[n], card = b.closest('.app-card');
-      call('approveMember', { email: m.email, name: card.querySelector('.ap-name').value.trim(), role: card.querySelector('.ap-role').value, depts: checked('ap' + n + '-d').join(','), kakaris: checkedK('ap' + n + '-k').join(',') })
+      var pl = { email: m.email, name: card.querySelector('.ap-name').value.trim(), role: card.querySelector('.ap-role').value };
+      if (m.outside) { pl.company = card.querySelector('.ap-company').value.trim(); pl.pjIds = checked('ap' + n + '-pj'); }
+      else { pl.depts = checked('ap' + n + '-d').join(','); pl.kakaris = checkedK('ap' + n + '-k').join(','); }
+      call('approveMember', pl)
         .then(function (r) { if (r) toast(m.name + 'さんを許可しました（メールで知らせました）'); });
     };
   });
@@ -821,6 +847,16 @@ function linkForm(pj) {
     S.st.bottlenecks.map(function (b) { return '<label><input type="checkbox" class="l-bn" value="' + b.id + '"' + (linked.indexOf(b.id) >= 0 ? ' checked' : '') + '><span><b>' + esc(bnLabel(b)) + '</b>｜' + esc(b.title) + '（PJ ' + pjsOfBn(b.id).length + '件）</span></label>'; }).join('') + '</div>';
   modal('解消するボトルネック', body, function () { return call('setLinks', { pjId: pj.id, bottleneckIds: checked('l-bn') }); });
 }
+// PJメンバー：ほかの課の人・外部企業の人をこのPJに入れる（入った人はこのPJの工程・タスクを入力できる）
+function pjMembersForm(pj) {
+  var cur = pj.members || [];
+  var mem = S.st.members.filter(function (m) { return m.active && m.role !== '社外コンサル'; });
+  var inside = mem.filter(function (m) { return !m.outside; }), outside = mem.filter(function (m) { return m.outside; });
+  function row(m) { return '<label><input type="checkbox" class="pm" value="' + esc(m.email) + '"' + (cur.indexOf(m.email) >= 0 ? ' checked' : '') + '><span>' + esc(m.name) + ' <span class="muted">' + esc(m.role) + '・' + esc(m.outside ? m.group : m.depts.join('、')) + '</span></span></label>'; }
+  var body = '<p class="muted">このPJの課（' + esc(pj.dept) + '）以外の人や、外部企業の人を入れます。入った人は、このPJを見られて、工程・タスクを入力できます（PJの情報を直す・PJを消すことはできません）。</p>' +
+    '<div class="checks">' + (outside.length ? '<div class="gl">外部企業</div>' + outside.map(row).join('') : '') + '<div class="gl">社内</div>' + inside.map(row).join('') + '</div>';
+  modal('PJメンバー：' + pj.name, body, function () { return call('setPjMembers', { pjId: pj.id, emails: checked('pm') }); });
+}
 function bnForm(b, vc, sub) {
   var st = S.st, isNew = !b;
   b = b || { vc: vc || '', sub: sub || '', status: '未着手' };
@@ -851,7 +887,7 @@ function dateForm(it) {
   modal('日付：' + it.name, body, function () { return call('updateItem', { id: it.id, fields: { start: fv('d-s'), end: fv('d-e') } }); });
 }
 function detailForm(it) {
-  var full = it.edit === 'full';
+  var full = it.edit === 'full' || it.edit === 'member';
   var body = '<div class="form"><label>完了の条件（クオリティ）</label><textarea id="d-q"' + (full ? '' : ' disabled') + '>' + esc(it.quality) + '</textarea>' +
     '<label>振り返り（抜け漏れ・スキル）</label><textarea id="d-r">' + esc(it.review) + '</textarea>' +
     '<label>メモ</label><textarea id="d-m">' + esc(it.memo) + '</textarea>' +
@@ -864,12 +900,16 @@ function memberForm(m) {
   var body = '<div class="form"><label class="req">メール</label><input id="m-email" value="' + esc(m.email || '') + '"' + (isNew ? '' : ' disabled') + '>' +
     '<label class="req">名前</label><input id="m-name" value="' + esc(m.name || '') + '">' +
     '<label class="req">役職</label><select id="m-role">' + st.roles.map(function (r) { return '<option' + (r === m.role ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select>' +
-    '<label>課（兼務は全部）</label>' + picker('m', m.depts, m.kakaris, st.org)[0] + '<label>係</label>' + picker('m', m.depts, m.kakaris, st.org)[1] +
+    '<label class="m-in">課（兼務は全部）</label><div class="m-in">' + picker('m', m.depts, m.kakaris, st.org)[0] + '</div><label class="m-in">係</label><div class="m-in">' + picker('m', m.depts, m.kakaris, st.org)[1] + '</div>' +
+    '<label class="m-out">会社名</label><input class="m-out" id="m-company" value="' + esc(m.outside ? m.group : '') + '">' +
     '<label>状態</label><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="m-active" style="width:auto"' + (m.active ? ' checked' : '') + '> 有効（ログインできる）</label></div>' +
-    '<p class="muted">管理者は役職で自動に決まります（取締役・執行役員・部長）。部長以上の役職の付け外しは、取締役か小林部長だけができます。</p>';
+    '<p class="muted">管理者は役職で自動に決まります（取締役・執行役員・部長）。部長以上・社外コンサルの付け外しは、取締役か小林部長だけができます。外部企業の方が見られるPJは、PJのガントの「PJメンバー」で決めます。</p>';
   modal(isNew ? 'メンバーを足す' : 'メンバーを直す', body, function () {
-    return call('saveMember', { email: isNew ? fv('m-email') : m.email, name: fv('m-name'), role: fv('m-role'), depts: checked('m-d').join(','), kakaris: checkedK('m-k').join(','), active: $('m-active').checked });
+    return call('saveMember', { email: isNew ? fv('m-email') : m.email, name: fv('m-name'), role: fv('m-role'), depts: checked('m-d').join(','), kakaris: checkedK('m-k').join(','), company: fv('m-company'), active: $('m-active').checked });
   });
+  var outs = st.rolesOutside || [];
+  var sw = function () { var o = outs.indexOf($('m-role').value) >= 0; document.querySelectorAll('#modal .m-in').forEach(function (e) { e.style.display = o ? 'none' : ''; }); document.querySelectorAll('#modal .m-out').forEach(function (e) { e.style.display = o ? '' : 'none'; }); };
+  $('m-role').onchange = sw; sw();
 }
 
 // ---------- 起動 ----------

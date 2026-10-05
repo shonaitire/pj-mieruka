@@ -215,10 +215,12 @@ function run(fn) {
   if (window.google && google.script && google.script.run) {
     return new Promise(function (res, rej) { var r = google.script.run.withSuccessHandler(res).withFailureHandler(rej); r[fn].apply(r, args); });
   }
+  var canZ = typeof DecompressionStream !== 'undefined';
   function once() {
-    return fetch(API_URL, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: fn, args: args }) })
+    return fetch(API_URL, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: fn, args: args, z: canZ ? 1 : 0 }) })
       .then(function (r) { if (!r.ok) { var e = new Error('通信エラー ' + r.status); e.net = true; throw e; } return r.json(); })
-      .then(function (j) { if (!j.ok) throw new Error(j.msg || 'エラー'); return j.result; }, function (e) { e.net = true; throw e; });
+      .then(function (j) { return j.z ? unzip(j.z) : j; }, function (e) { e.net = true; throw e; })
+      .then(function (j) { if (!j.ok) throw new Error(j.msg || 'エラー'); return j.result; });
   }
   // Google側の通信はときどき失敗する（404など）ので、間をあけて最大4回やり直す。書き込みは同じ番号（_rid）で送るので二重にならない
   var waits = [1500, 3000, 5000];
@@ -230,6 +232,14 @@ function run(fn) {
   }
   return attempt(0);
 }
+// 圧縮された返事を元に戻す
+function unzip(b64) {
+  var bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).text().then(function (t) { return JSON.parse(t); });
+}
+function setState(st) { S.st = st; recompute(); }
 function busy(on) { $('busy').classList.toggle('hidden', !on); }
 var toastT;
 function toast(msg, err) {
@@ -247,7 +257,7 @@ function call(action, payload) {
     return run('api', S.token, S.viewAs, 'state', payload).then(function (r) {
       busy(false);
       if (!r.ok) { if (r.auth === false) { logoutLocal(); return null; } toast(r.msg || 'うまくいきませんでした', true); return null; }
-      if (!wq.length && !wqBusy) { S.st = r.state; render(); }
+      if (!wq.length && !wqBusy) { setState(r.state); render(); }
       return true;
     }).catch(function () { busy(false); toast('通信できませんでした。少し待ってから画面を読み込み直してください。', true); return null; });
   }
@@ -266,11 +276,11 @@ function pump() {
     if (!r.ok) {
       if (r.auth === false) { wq = []; logoutLocal(); job.resolve(null); return; }
       toast(r.msg || 'うまくいきませんでした', true);
-      if (r.state) { S.st = r.state; render(); } else refreshAfterFail();
+      if (r.state) { setState(r.state); render(); } else refreshAfterFail();
       job.resolve(null);
     } else {
       // 列に次の保存が残っている時は、画面を上書きしない（先に反映した変更が一瞬戻るのを防ぐ）
-      if (!wq.length) { S.st = r.state; render(); }
+      if (!wq.length) { setState(r.state); render(); }
       job.resolve(r.result || true);
     }
     pump();
@@ -284,7 +294,7 @@ function pump() {
   });
 }
 function refreshAfterFail() {
-  run('api', S.token, S.viewAs, 'state', {}).then(function (r) { if (r && r.ok && !wq.length && !wqBusy) { S.st = r.state; render(); toast('画面を最新にしました。保存されていれば、もう一度押さなくて大丈夫です。'); } }).catch(function () { });
+  run('api', S.token, S.viewAs, 'state', {}).then(function (r) { if (r && r.ok && !wq.length && !wqBusy) { setState(r.state); render(); toast('画面を最新にしました。保存されていれば、もう一度押さなくて大丈夫です。'); } }).catch(function () { });
 }
 function savingBadge() {
   var el = $('saving'); if (!el) return;

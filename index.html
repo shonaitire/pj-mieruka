@@ -171,6 +171,8 @@ th.mon{text-align:left;font-size:12px;border-left:1px solid #9FA79A;padding:6px 
 .checks label{display:flex;gap:8px;align-items:flex-start;color:var(--ink);padding:3px 0;font-size:13px}
 .checks .gl{font-size:11px;color:var(--sub);font-weight:700;margin-top:6px}
 .msg{color:var(--late);font-size:13px;min-height:18px;margin-top:6px}
+.savebadge{font-size:12px;color:var(--done);background:var(--done-soft);padding:3px 10px;border-radius:999px;white-space:nowrap}
+.savebadge.on{color:#6B4A00;background:var(--warn-soft)}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1D2226;color:#fff;padding:10px 16px;border-radius:8px;z-index:60;font-size:13px;max-width:90vw}
 .toast.err{background:var(--late)}
 .busy{position:fixed;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--accent-2),transparent);background-size:50% 100%;animation:b 1s linear infinite;z-index:70}
@@ -235,28 +237,96 @@ function toast(msg, err) {
   clearTimeout(toastT); toastT = setTimeout(function () { t.classList.add('hidden'); }, err ? 6000 : 2500);
 }
 function rid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
-var saving = false;
+// 書き込みは順番待ちの列に入れて、1つずつ裏で送る（画面は止めない）
+var wq = [], wqBusy = false;
 function call(action, payload) {
   var write = action && action !== 'state';
-  if (write && saving) { toast('前の保存がまだ終わっていません。少し待ってからもう一度どうぞ。', true); return Promise.resolve(null); }
   payload = payload || {};
+  if (!write) {
+    busy(true);
+    return run('api', S.token, S.viewAs, 'state', payload).then(function (r) {
+      busy(false);
+      if (!r.ok) { if (r.auth === false) { logoutLocal(); return null; } toast(r.msg || 'うまくいきませんでした', true); return null; }
+      if (!wq.length && !wqBusy) { S.st = r.state; render(); }
+      return true;
+    }).catch(function () { busy(false); toast('通信できませんでした。少し待ってから画面を読み込み直してください。', true); return null; });
+  }
   // 返事が届かなかった操作をもう一度押した時は、前と同じ番号で送る（サーバー側で1回分にまとまる）
-  var key = write ? action + JSON.stringify(payload) : '';
-  if (write && !payload._rid) payload._rid = (S.failRid && S.failRid[key]) || rid();
-  if (write) saving = true;
-  busy(true);
-  return run('api', S.token, S.viewAs, action || 'state', payload).then(function (r) {
-    busy(false); if (write) { saving = false; if (S.failRid) delete S.failRid[key]; }
-    if (!r.ok) { if (r.auth === false) { logoutLocal(); return null; } toast(r.msg || 'うまくいきませんでした', true); return null; }
-    S.st = r.state; render(); return r.result || true;
-  }).catch(function (e) {
-    busy(false); if (write) saving = false;
-    if (!write) { toast('通信できませんでした。少し待ってから画面を読み込み直してください。', true); return null; }
-    // 書き込みの返事だけ届かなかった時：保存はできていることが多いので、最新の状態を読み直して見せる
-    S.failRid = S.failRid || {}; S.failRid[key] = payload._rid;
-    toast('通信が不安定でした。保存できたかを画面で確かめています…', true);
-    return run('api', S.token, S.viewAs, 'state', {}).then(function (r) { if (r && r.ok) { S.st = r.state; render(); toast('画面を最新にしました。保存されていれば、もう一度押さなくて大丈夫です。'); } return null; }).catch(function () { return null; });
+  var key = action + JSON.stringify(payload);
+  if (!payload._rid) payload._rid = (S.failRid && S.failRid[key]) || rid();
+  return new Promise(function (resolve) { wq.push({ action: action, payload: payload, key: key, resolve: resolve }); pump(); });
+}
+function pump() {
+  if (wqBusy || !wq.length) { busy(wqBusy); savingBadge(); return; }
+  wqBusy = true; busy(true); savingBadge();
+  var job = wq.shift();
+  run('api', S.token, S.viewAs, job.action, job.payload).then(function (r) {
+    wqBusy = false;
+    if (S.failRid) delete S.failRid[job.key];
+    if (!r.ok) {
+      if (r.auth === false) { wq = []; logoutLocal(); job.resolve(null); return; }
+      toast(r.msg || 'うまくいきませんでした', true);
+      if (r.state) { S.st = r.state; render(); } else refreshAfterFail();
+      job.resolve(null);
+    } else {
+      // 列に次の保存が残っている時は、画面を上書きしない（先に反映した変更が一瞬戻るのを防ぐ）
+      if (!wq.length) { S.st = r.state; render(); }
+      job.resolve(r.result || true);
+    }
+    pump();
+  }).catch(function () {
+    wqBusy = false;
+    S.failRid = S.failRid || {}; S.failRid[job.key] = job.payload._rid;
+    toast('通信が不安定でした。保存できたかを確かめています…', true);
+    refreshAfterFail();
+    job.resolve(null);
+    pump();
   });
+}
+function refreshAfterFail() {
+  run('api', S.token, S.viewAs, 'state', {}).then(function (r) { if (r && r.ok && !wq.length && !wqBusy) { S.st = r.state; render(); toast('画面を最新にしました。保存されていれば、もう一度押さなくて大丈夫です。'); } }).catch(function () { });
+}
+function savingBadge() {
+  var el = $('saving'); if (!el) return;
+  var n = wq.length + (wqBusy ? 1 : 0);
+  el.textContent = n ? '保存中…（' + n + '件）' : '保存済み';
+  el.className = 'savebadge' + (n ? ' on' : '');
+}
+// 状態・日付・進捗などは、押した瞬間に画面に反映してから裏で保存する
+function quickUpdate(id, fields) {
+  var it = byId(id);
+  if (it) {
+    Object.keys(fields).forEach(function (k) { it[k] = k === 'assignees' ? String(fields[k]).split(',').filter(Boolean) : fields[k]; });
+    recompute(); render();
+  }
+  return call('updateItem', { id: id, fields: fields });
+}
+// サーバーと同じ計算（子から親へ：日付・進捗・状態・遅れ）を画面側でもする
+function recompute() {
+  var list = S.st.items, today = S.st.today, kidsOf = {}, res = {};
+  list.forEach(function (i) { (kidsOf[i.parentId || ''] = kidsOf[i.parentId || ''] || []).push(i); });
+  function calc(it) {
+    if (res[it.id]) return res[it.id];
+    var ch = (kidsOf[it.id] || []).slice().sort(function (a, b) { return a.order - b.order; }), r;
+    if (!ch.length) {
+      var st = it.status || '未着手';
+      var pr = st === '完了' ? 100 : st === '未着手' ? 0 : (it.progress !== '' && it.progress != null && !isNaN(Number(it.progress)) ? Number(it.progress) : (st === '進行中' ? 50 : 0));
+      var late = !!(it.end && it.end < today && st !== '完了' && st !== '保留');
+      r = { start: it.start || '', end: it.end || '', status: st, progress: Math.round(pr), late: late, leaf: true, leaves: 1, done: st === '完了' ? 1 : 0, lateCount: late ? 1 : 0, people: (it.assignees || []).slice() };
+    } else {
+      var cs = ch.map(calc), sum = 0, people = (it.assignees || []).slice();
+      cs.forEach(function (c) { sum += c.progress; c.people.forEach(function (x) { if (people.indexOf(x) < 0) people.push(x); }); });
+      var starts = cs.map(function (c) { return c.start; }).filter(Boolean).sort(), ends = cs.map(function (c) { return c.end; }).filter(Boolean).sort();
+      r = { start: starts[0] || it.start || '', end: ends[ends.length - 1] || it.end || '',
+        status: cs.every(function (c) { return c.status === '完了'; }) ? '完了' : cs.every(function (c) { return c.status === '未着手'; }) ? '未着手' : '進行中',
+        progress: Math.round(sum / cs.length), late: cs.some(function (c) { return c.late; }), leaf: false,
+        leaves: cs.reduce(function (a, c) { return a + c.leaves; }, 0), done: cs.reduce(function (a, c) { return a + c.done; }, 0),
+        lateCount: cs.reduce(function (a, c) { return a + c.lateCount; }, 0), people: people };
+    }
+    if (it.type === 'PJ') { r.overDeadline = !!(it.deadline && r.end && r.end > it.deadline); if (it.leader && r.people.indexOf(it.leader) < 0) r.people = [it.leader].concat(r.people); }
+    res[it.id] = r; return r;
+  }
+  list.forEach(function (it) { it.c = calc(it); });
 }
 function logoutLocal() { S.token = null; S.st = null; saveToken(null); renderLogin(); }
 
@@ -430,10 +500,11 @@ function render() {
   }
   $('app').innerHTML = '<header><div class="brand">PJ見える化<small>庄内タイヤ</small></div><nav>' +
     tabs.map(function (t) { return '<button data-tab="' + t[0] + '" class="' + (S.tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') +
-    '</nav><div class="who">' + viewSel + '<span>' + esc(st.me.name) + '（' + esc(st.me.role) + '）</span><button class="btn small" id="logout">ログアウト</button></div></header>' +
+    '</nav><div class="who"><span id="saving" class="savebadge">保存済み</span>' + viewSel + '<span>' + esc(st.me.name) + '（' + esc(st.me.role) + '）</span><button class="btn small" id="logout">ログアウト</button></div></header>' +
     (st.viewing ? '<div class="viewing">テスト表示中：<b>' + esc(st.me.name) + '（' + esc(st.me.role) + '）</b>の見え方・権限です。この状態で直すと、その人の権限で書き込みます。</div>' : '') +
     '<main id="view"></main>';
   document.querySelectorAll('nav button').forEach(function (b) { b.onclick = function () { S.tab = b.dataset.tab; render(); }; });
+  savingBadge();
   $('logout').onclick = function () { run('logout', S.token); logoutLocal(); };
   if ($('viewas')) $('viewas').onchange = function () { S.viewAs = this.value; call('state'); };
   if (S.tab === 'mem' && !st.can.admin) S.tab = 'vc';
@@ -693,7 +764,7 @@ function bindGantt(el, pj, cols) {
       var id = sp.dataset.ename, it = byId(id), inp = document.createElement('input');
       inp.value = it.name; sp.replaceWith(inp); inp.focus(); inp.select();
       var done = false;
-      function save() { if (done) return; done = true; var v = inp.value.trim(); if (v && v !== it.name) call('updateItem', { id: id, fields: { name: v } }); else renderGantt(el); }
+      function save() { if (done) return; done = true; var v = inp.value.trim(); if (v && v !== it.name) quickUpdate(id, { name: v }); else renderGantt(el); }
       inp.onblur = save;
       inp.onkeydown = function (e) { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { done = true; renderGantt(el); } };
     };
@@ -704,7 +775,7 @@ function bindGantt(el, pj, cols) {
     inp.onchange = function () {
       var f = {}, k = inp.dataset.f; f[k] = inp.value;
       if (k === 'status' && inp.value === '進行中' && !byId(inp.dataset.id).progress) f.progress = '50';
-      call('updateItem', { id: inp.dataset.id, fields: f });
+      quickUpdate(inp.dataset.id, f);
     };
   });
   el.querySelectorAll('[data-a]').forEach(function (b) {
@@ -723,7 +794,7 @@ function bindGantt(el, pj, cols) {
       if (!it.start || !it.end) { f.start = it.start && it.start < w.s ? it.start : w.s; f.end = w.e; }
       else if (w.s < it.start) f.start = w.s;
       else f.end = w.e;
-      call('updateItem', { id: it.id, fields: f });
+      quickUpdate(it.id, f);
     };
   });
 }
@@ -746,7 +817,7 @@ function renderMine(el) {
     (open.length ? open.map(row).join('') : '<tr><td colspan="5"><div class="empty">未完了のタスクはありません。</div></td></tr>') +
     (done.length ? '<tr class="grp2"><td colspan="5">完了 ' + done.length + '件</td></tr>' + done.map(row).join('') : '') + '</tbody></table></div>';
   el.querySelectorAll('[data-pj]').forEach(function (a) { a.onclick = function () { openPj(a.dataset.pj); }; });
-  el.querySelectorAll('[data-ms]').forEach(function (s) { s.onchange = function () { var f = { status: s.value }; if (s.value === '進行中') f.progress = '50'; call('updateItem', { id: s.dataset.ms, fields: f }); }; });
+  el.querySelectorAll('[data-ms]').forEach(function (s) { s.onchange = function () { var f = { status: s.value }; if (s.value === '進行中') f.progress = '50'; quickUpdate(s.dataset.ms, f); }; });
 }
 
 // ---------- ボトルネック ----------
@@ -910,12 +981,12 @@ function whoForm(it) {
     '</div><div class="form" style="margin-top:12px"><label>社外・その他</label><input id="w-other" value="' + esc(others.join(', ')) + '" placeholder="例：大塚さん（外部）, 専務"></div>';
   modal('担当：' + it.name, body, function () {
     var list = checked('w-m').concat(fv('w-other').split(/[,、，]/).map(function (x) { return x.trim(); }).filter(Boolean));
-    return call('updateItem', { id: it.id, fields: { assignees: list.join(',') } });
+    quickUpdate(it.id, { assignees: list.join(',') }); return true;
   });
 }
 function dateForm(it) {
   var body = '<div class="form"><label>開始</label><input type="date" id="d-s" value="' + esc(it.start) + '"><label>期限</label><input type="date" id="d-e" value="' + esc(it.end) + '"></div>';
-  modal('日付：' + it.name, body, function () { return call('updateItem', { id: it.id, fields: { start: fv('d-s'), end: fv('d-e') } }); });
+  modal('日付：' + it.name, body, function () { var s0 = fv('d-s'), e0 = fv('d-e'); if (s0 && e0 && s0 > e0) { $('mf-msg').textContent = '開始日が期限より後になっています。'; return false; } quickUpdate(it.id, { start: s0, end: e0 }); return true; });
 }
 function detailForm(it) {
   var full = it.edit === 'full' || it.edit === 'member';
@@ -923,7 +994,7 @@ function detailForm(it) {
     '<label>振り返り（抜け漏れ・スキル）</label><textarea id="d-r">' + esc(it.review) + '</textarea>' +
     '<label>メモ</label><textarea id="d-m">' + esc(it.memo) + '</textarea>' +
     '<label>最終更新</label><div class="muted">' + esc(it.updatedBy) + ' ' + esc(jst(it.updatedAt)) + '</div></div>';
-  modal(it.name, body, function () { var f = { review: fv('d-r'), memo: fv('d-m') }; if (full) f.quality = fv('d-q'); return call('updateItem', { id: it.id, fields: f }); });
+  modal(it.name, body, function () { var f = { review: fv('d-r'), memo: fv('d-m') }; if (full) f.quality = fv('d-q'); quickUpdate(it.id, f); return true; });
 }
 function memberForm(m) {
   var st = S.st, isNew = !m;

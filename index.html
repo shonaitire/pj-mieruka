@@ -215,10 +215,18 @@ function run(fn) {
   }
   function once() {
     return fetch(API_URL, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: fn, args: args }) })
-      .then(function (r) { if (!r.ok) throw new Error('通信エラー ' + r.status); return r.json(); })
-      .then(function (j) { if (!j.ok) throw new Error(j.msg || 'エラー'); return j.result; });
+      .then(function (r) { if (!r.ok) { var e = new Error('通信エラー ' + r.status); e.net = true; throw e; } return r.json(); })
+      .then(function (j) { if (!j.ok) throw new Error(j.msg || 'エラー'); return j.result; }, function (e) { e.net = true; throw e; });
   }
-  return once().catch(function () { return new Promise(function (r) { setTimeout(r, 1500); }).then(once); });
+  // Google側の通信はときどき失敗する（404など）ので、間をあけて最大4回やり直す。書き込みは同じ番号（_rid）で送るので二重にならない
+  var waits = [1500, 3000, 5000];
+  function attempt(n) {
+    return once().catch(function (e) {
+      if (!e.net || n >= waits.length) throw e;
+      return new Promise(function (r) { setTimeout(r, waits[n]); }).then(function () { return attempt(n + 1); });
+    });
+  }
+  return attempt(0);
 }
 function busy(on) { $('busy').classList.toggle('hidden', !on); }
 var toastT;
@@ -226,13 +234,29 @@ function toast(msg, err) {
   var t = $('toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : '');
   clearTimeout(toastT); toastT = setTimeout(function () { t.classList.add('hidden'); }, err ? 6000 : 2500);
 }
+function rid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+var saving = false;
 function call(action, payload) {
+  var write = action && action !== 'state';
+  if (write && saving) { toast('前の保存がまだ終わっていません。少し待ってからもう一度どうぞ。', true); return Promise.resolve(null); }
+  payload = payload || {};
+  // 返事が届かなかった操作をもう一度押した時は、前と同じ番号で送る（サーバー側で1回分にまとまる）
+  var key = write ? action + JSON.stringify(payload) : '';
+  if (write && !payload._rid) payload._rid = (S.failRid && S.failRid[key]) || rid();
+  if (write) saving = true;
   busy(true);
-  return run('api', S.token, S.viewAs, action || 'state', payload || {}).then(function (r) {
-    busy(false);
+  return run('api', S.token, S.viewAs, action || 'state', payload).then(function (r) {
+    busy(false); if (write) { saving = false; if (S.failRid) delete S.failRid[key]; }
     if (!r.ok) { if (r.auth === false) { logoutLocal(); return null; } toast(r.msg || 'うまくいきませんでした', true); return null; }
     S.st = r.state; render(); return r.result || true;
-  }).catch(function (e) { busy(false); toast('通信できませんでした：' + (e && e.message || e), true); return null; });
+  }).catch(function (e) {
+    busy(false); if (write) saving = false;
+    if (!write) { toast('通信できませんでした。少し待ってから画面を読み込み直してください。', true); return null; }
+    // 書き込みの返事だけ届かなかった時：保存はできていることが多いので、最新の状態を読み直して見せる
+    S.failRid = S.failRid || {}; S.failRid[key] = payload._rid;
+    toast('通信が不安定でした。保存できたかを画面で確かめています…', true);
+    return run('api', S.token, S.viewAs, 'state', {}).then(function (r) { if (r && r.ok) { S.st = r.state; render(); toast('画面を最新にしました。保存されていれば、もう一度押さなくて大丈夫です。'); } return null; }).catch(function () { return null; });
+  });
 }
 function logoutLocal() { S.token = null; S.st = null; saveToken(null); renderLogin(); }
 
@@ -799,7 +823,14 @@ function modal(title, body, onOk, okLabel) {
   $('modal').innerHTML = '<div class="modal-bg"><div class="modal"><h3>' + esc(title) + '</h3>' + body + '<div class="msg" id="mf-msg"></div><div class="mbtns"><button class="btn" id="mf-cancel">やめる</button><button class="btn primary" id="mf-ok">' + (okLabel || '保存') + '</button></div></div></div>';
   $('mf-cancel').onclick = closeModal;
   bindPickers($('modal'));
-  $('mf-ok').onclick = function () { var r = onOk(); if (r === false) return; if (r && r.then) r.then(function (ok) { if (ok) closeModal(); }); else closeModal(); };
+  $('mf-ok').onclick = function () {
+    var b = $('mf-ok'); if (b.disabled) return;
+    var label = b.textContent; b.disabled = true; b.textContent = '保存中…（少しかかります）';
+    var r = onOk();
+    if (r === false) { b.disabled = false; b.textContent = label; return; }
+    if (r && r.then) r.then(function (ok) { if (ok) closeModal(); else if ($('mf-ok')) { $('mf-ok').disabled = false; $('mf-ok').textContent = label; } });
+    else closeModal();
+  };
 }
 function closeModal() { $('modal').innerHTML = ''; }
 function fv(id) { var e = $(id); return e ? (e.type === 'checkbox' ? e.checked : e.value.trim()) : ''; }

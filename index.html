@@ -234,7 +234,17 @@ function run(fn) {
       return new Promise(function (r) { setTimeout(r, waits[n]); }).then(function () { return attempt(n + 1); });
     });
   }
+  // 読み込みは、Google側の返事の速さが1回ごとに3秒〜30秒とばらつくので、返事が遅ければ同じ読み込みをもう1本出して、先に届いた方を使う
+  if (fn === 'publicInfo' || (fn === 'api' && args[2] === 'state')) return hedge(once, [4000, 9000, 16000]).catch(function () { return attempt(0); });
   return attempt(0);
+}
+function hedge(once, delays) {
+  return new Promise(function (res, rej) {
+    var done = false, pending = delays.length + 1;
+    function go() { once().then(function (v) { if (!done) { done = true; res(v); } }, function (e) { if (--pending === 0 && !done) rej(e); }); }
+    go();
+    delays.forEach(function (d) { setTimeout(function () { if (!done) go(); }, d); });
+  });
 }
 // 圧縮された返事を元に戻す
 function unzip(b64) {

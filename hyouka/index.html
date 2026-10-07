@@ -276,7 +276,7 @@ function viewList() {
     '<th class="num">サークル</th><th class="num">加点減点</th>' + th('after', '加点減点後', 'num') + th('rankPt', 'ランク') + th('test', 'テスト平均', 'num') + '<th class="num">号俸</th></tr></thead><tbody>';
   list.forEach(function (sh) {
     var c = calc(sh), ta = testAvg(sh), needTest = sh.testTarget === 'TRUE';
-    h += '<tr class="click" onclick="openSheet(\'' + sh.id + '\')"><td><b>' + esc(sname(sh.staffId)) + '</b>' + (sh.canEdit ? '' : ' <span class="muted">閲覧</span>') + '</td><td>' + esc(shortDept(sh.dept)) + '</td><td>' + esc(sh.role) + (sh.newcomer === 'TRUE' ? ' <span class="pill">1年未満</span>' : '') + '</td>' +
+    h += '<tr class="click" onclick="openSheet(\'' + sh.id + '\')"><td><b>' + esc(sname(sh.staffId)) + '</b>' + (sh.canEdit ? '' : ' <span class="muted">閲覧</span>') + '</td><td>' + esc(shortDept(sh.dept)) + '</td><td onclick="event.stopPropagation()">' + roleSel(sh) + '</td>' +
       '<td>' + esc(sname(sh.eval1)) + '</td><td>' + esc(sname(sh.eval2)) + '</td><td>' + esc(sname(sh.evalF)) + '</td>' +
       '<td class="' + (c.ratioOk ? '' : 'warn') + '" title="' + (c.need ? c.rkey + 'の決まり：' + c.need.join('/') : '') + '">' + c.ratio.A + '/' + c.ratio.B + '/' + c.ratio.C + '</td>' +
       '<td class="num ' + (c.wsum === 100 ? '' : 'warn') + '">' + c.wsum + '%</td>' +
@@ -287,6 +287,24 @@ function viewList() {
       '<td class="num">' + (sh.goho && sh.goho.up !== '' ? (sh.goho.up > 0 ? '+' : '') + sh.goho.up : '') + '</td></tr>';
   });
   return h + '</tbody></table></div><p class="muted">赤字：A/B/C比率が役職の決まりと違う／ウエイト合計が100%でない／テスト対象なのに未入力。合計は最終→2次→1次の順で入っているものを使います。</p>';
+}
+
+// 役職の選択（管理者だけ）。「一般（入社1年未満）」は役職＝一般＋入社1年未満
+var ROLE_CHOICES = ['取締役', '執行役員', '部長', '課長', '係長', '主任', 'エキスパート', '一般', '一般（入社1年未満）', 'パート'];
+function roleLabel(sh) { return sh.role === '一般' && sh.newcomer === 'TRUE' ? '一般（入社1年未満）' : sh.role + (sh.newcomer === 'TRUE' ? '（入社1年未満）' : ''); }
+function roleSel(sh) {
+  if (!S.st.me.isAdmin) return esc(roleLabel(sh));
+  var cur = roleLabel(sh);
+  return '<select class="cell" style="min-width:150px" onchange="setRole(\'' + sh.id + '\',this.value)">' + ROLE_CHOICES.map(function (r) {
+    return '<option' + (r === cur ? ' selected' : '') + '>' + r + '</option>'; }).join('') + (ROLE_CHOICES.indexOf(cur) < 0 ? '<option selected>' + esc(cur) + '</option>' : '') + '</select>';
+}
+function setRole(id, v) {
+  var nc = v === '一般（入社1年未満）', role = nc ? '一般' : v;
+  S.st.sheets.forEach(function (s) { if (s.id === id) { s.role = role; s.newcomer = nc ? 'TRUE' : ''; s.testTarget = role === '一般' ? 'TRUE' : ''; } });
+  call('setRole', { id: id, role: role, newcomer: nc }, false).then(rerenderSoft);
+  rerenderSoft();
+  var sh = S.st.sheets.filter(function (s) { return s.id === id; })[0], c = calc(sh);
+  toast(sname(sh.staffId) + '：' + v + '　A/B/C ' + c.ratio.A + '/' + c.ratio.B + '/' + c.ratio.C + (c.need ? (c.ratioOk ? ' → 決まりどおり' : ' → 決まり（' + c.need.join('/') + '）と違う') : ''), c.need && !c.ratioOk);
 }
 
 // ---- シート詳細 ----
@@ -308,7 +326,7 @@ function viewSheet() {
   if (!sh) { S.sheetId = ''; return viewList(); }
   var ro = !sh.canEdit, c = calc(sh), p = period(sh.periodId), st = staff(sh.staffId) || {}, me = S.st.me;
   var h = '<div class="bar">' + (me.viewAll ? '<button class="btn small" onclick="openSheet(\'\')">← 一覧へ</button>' : '') +
-    '<h2 style="margin:0">' + esc(st.name) + ' <span class="muted">' + esc(sh.dept) + '・' + esc(sh.role) + '・' + esc(p ? p.name : '') + '</span></h2>' +
+    '<h2 style="margin:0">' + esc(st.name) + ' <span class="muted">' + esc(sh.dept) + '・' + esc(p ? p.name : '') + '</span></h2>' + roleSel(sh) +
     (ro ? '<span class="pill">閲覧のみ</span>' : '<span class="pill" style="background:var(--done-soft)">直せます</span>') + '</div>';
   h += '<div class="muted">1次評価者：' + esc(sname(sh.eval1) || '未設定') + '　2次：' + esc(sname(sh.eval2) || '未設定') + '　最終：' + esc(sname(sh.evalF) || '未設定') + '</div>';
   // 数字のまとめ

@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>人事評価アプリ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap">
+<style>
+:root{
+  --bg:#F3F4F1;--panel:#FFFFFF;--ink:#1D2226;--sub:#5C646B;--line:#D9DCD5;--grid:#ECEEE8;--head:#E8ECF1;
+  --accent:#24548A;--accent-2:#3C78B8;--soft:#DDE7F2;--late:#B8412F;--late-soft:#F6DFDA;--warn-soft:#F6EBCB;--done:#3D7A4C;--done-soft:#DCEEDF;
+  --a:#F3E3C3;--b:#DDE7F2;--c:#E4EEDD;
+  font-family:"BIZ UDPGothic","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-size:14px;line-height:1.55;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.hidden{display:none!important}
+header{position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:10px 20px;flex-wrap:wrap}
+header .brand{font-weight:700;font-size:16px;white-space:nowrap}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{border:0;background:transparent;padding:8px 14px;border-radius:8px;color:var(--sub);white-space:nowrap}
+nav button.on{background:var(--soft);color:var(--accent);font-weight:700}
+.who{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--sub);flex-wrap:wrap}
+select,input[type=text],input[type=number],input[type=email],textarea{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:4px 8px}
+main{padding:16px 20px;max-width:2000px;margin:0 auto}
+h2{font-size:19px;margin:4px 0 6px}
+h3{font-size:15px;margin:22px 0 8px}
+.lead{color:var(--sub);margin:0 0 12px;font-size:13px}
+.muted{color:var(--sub);font-size:12px}
+.btn{border:1px solid var(--line);background:var(--panel);padding:6px 14px;border-radius:8px;white-space:nowrap}
+.btn:hover{border-color:#B9BFB4}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.small{padding:2px 9px;font-size:12px}
+.btn.danger{color:var(--late);border-color:#E3B9B1}
+.btn.on{background:var(--soft);border-color:var(--accent-2);color:var(--accent);font-weight:700}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+.wrap{overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;max-height:calc(100vh - 170px)}
+table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
+th,td{border-bottom:1px solid var(--grid);border-right:1px solid var(--grid);padding:5px 8px;vertical-align:top;text-align:left;font-size:13px}
+thead th{position:sticky;top:0;background:var(--head);z-index:2;font-weight:700;white-space:nowrap}
+thead tr.sub th{top:31px}
+th.sort{cursor:pointer}
+th.sort:hover{color:var(--accent)}
+tbody tr:hover td{background:#FAFBF8}
+tr.click{cursor:pointer}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.warn{background:var(--late-soft)!important;color:var(--late);font-weight:700}
+td.ok{color:var(--done)}
+.tagA{background:var(--a)}.tagB{background:var(--b)}.tagC{background:var(--c)}
+.pill{display:inline-block;border-radius:999px;padding:0 8px;font-size:12px;background:var(--grid)}
+.rank{font-weight:700;color:var(--accent)}
+td input.cell,td select.cell{width:100%;min-width:56px;border:1px solid transparent;background:transparent;padding:2px 4px;border-radius:4px}
+td input.cell:hover,td select.cell:hover,td textarea.cell:hover{border-color:var(--line)}
+td input.cell:focus,td select.cell:focus,td textarea.cell:focus{border-color:var(--accent-2);background:#fff;outline:none}
+td textarea.cell{width:100%;border:1px solid transparent;background:transparent;resize:vertical;min-height:28px;padding:2px 4px;border-radius:4px}
+.rng{min-width:92px;max-width:120px;font-size:12px}
+.hit{background:#FFF1B8!important}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:8px 0 14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.card b{display:block;font-size:20px}
+.card.warn{border-color:#E3B9B1;background:var(--late-soft)}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0}
+.cm{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cm label{font-size:12px;color:var(--sub);display:block;margin-bottom:2px}
+.cm textarea{width:100%;min-height:70px}
+.priv{border-left:3px solid #C27A00;padding-left:8px}
+.busy{position:fixed;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent-2));z-index:99;animation:ld 1s linear infinite}
+@keyframes ld{0%{opacity:.4}50%{opacity:1}100%{opacity:.4}}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1D2226;color:#fff;padding:10px 18px;border-radius:8px;z-index:100;max-width:80vw}
+.toast.err{background:var(--late)}
+.login{max-width:380px;margin:12vh auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px}
+.login input{width:100%;padding:8px 10px;margin:6px 0 12px}
+#modal .back{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding-top:8vh}
+#modal .dlg{background:var(--panel);border-radius:12px;padding:18px 20px;max-width:720px;width:92vw;max-height:80vh;overflow:auto}
+.saving{font-size:12px;color:var(--sub)}
+</style>
+</head>
+<body>
+<div id="busy" class="busy hidden"></div>
+<div id="app"></div>
+<div id="modal"></div>
+<div id="toast" class="toast hidden"></div>
+<script>
+// 人事評価アプリの中身（Apps Script）と、ログインに使うPJ見える化アプリ
+var API_URL = 'https://script.google.com/macros/s/AKfycbxGiz4lDtR8M7ZIuS4yO5H1rX-mE_Pqef9_5fP2rBpYElDLXmgFRU671TAVn5Ddte7rug/exec';
+var PJ_API_URL = 'https://script.google.com/macros/s/AKfycbyNA5O0s4jwjpHnBVf3sAT9i8cENFDI7V0Ofxb6LqxHrEhun5kBOdvF7vQNneLxsae0/exec';
+var PJ_APP_URL = 'https://shonaitire.github.io/pj-mieruka/';
+var S = { token: null, st: null, tab: 'list', sheetId: '', periodId: '', sort: { k: 'order', d: 1 }, f: { dept: '', ev: '', q: '' },
+  behLvl: 's1', login: { step: 1, email: '' } };
+try { S.token = localStorage.getItem('pjv_token') || sessionStorage.getItem('pjv_token'); S.periodId = localStorage.getItem('hr_period') || ''; } catch (e) { }
+function saveToken(t, remember) {
+  try { localStorage.removeItem('pjv_token'); sessionStorage.removeItem('pjv_token'); if (t) (remember ? localStorage : sessionStorage).setItem('pjv_token', t); } catch (e) { }
+}
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function $(id) { return document.getElementById(id); }
+function post(url, fn, args) {
+  var canZ = typeof DecompressionStream !== 'undefined';
+  function once() {
+    return fetch(url, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: fn, args: args, z: canZ ? 1 : 0 }) })
+      .then(function (r) { if (!r.ok) { var e = new Error('通信エラー ' + r.status); e.net = true; throw e; } return r.json(); })
+      .then(function (j) { return j.z ? unzip(j.z) : j; }, function (e) { e.net = true; throw e; })
+      .then(function (j) { if (!j.ok) throw new Error(j.msg || 'エラー'); return j.result; });
+  }
+  var waits = [1500, 3000, 5000];
+  function attempt(n) {
+    return once().catch(function (e) {
+      if (!e.net || n >= waits.length) throw e;
+      return new Promise(function (r) { setTimeout(r, waits[n]); }).then(function () { return attempt(n + 1); });
+    });
+  }
+  return attempt(0);
+}
+function unzip(b64) {
+  var bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).text().then(function (t) { return JSON.parse(t); });
+}
+function busy(on) { $('busy').classList.toggle('hidden', !on); }
+var toastT;
+function toast(msg, err) {
+  var t = $('toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : '');
+  clearTimeout(toastT); toastT = setTimeout(function () { t.classList.add('hidden'); }, err ? 7000 : 2500);
+}
+function rid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+
+// 読み込み
+function load() {
+  busy(true);
+  return post(API_URL, 'api', [S.token, 'state', { periodId: S.periodId }]).then(function (r) {
+    busy(false);
+    if (!r.ok) { if (r.auth === false) { S.token = null; saveToken(null); } else toast(r.msg, true); S.err = r.msg; render(); return; }
+    S.err = ''; setState(r.state); render();
+  }).catch(function (e) { busy(false); toast(e.message, true); });
+}
+function setState(st) { S.st = st; S.periodId = st.periodId; try { localStorage.setItem('hr_period', st.periodId); } catch (e) { } }
+
+// 書き込みは順番に1つずつ送る。画面は先に直しておく
+var wq = [], wqBusy = false;
+function call(action, payload, reload) {
+  payload = payload || {}; payload._rid = rid(); payload.periodId = S.periodId;
+  return new Promise(function (res, rej) { wq.push({ a: action, p: payload, res: res, rej: rej, reload: reload }); pump(); });
+}
+function pump() {
+  if (wqBusy || !wq.length) { showSaving(); return; }
+  wqBusy = true; showSaving();
+  var job = wq.shift();
+  post(API_URL, 'api', [S.token, job.a, job.p]).then(function (r) {
+    wqBusy = false;
+    if (!r.ok) { toast(r.msg, true); job.rej(new Error(r.msg)); if (r.auth === false) { S.token = null; render(); return; } setState(r.state || S.st); render(); pump(); return; }
+    // 送るものが残っている間は画面を差し替えない（入力中の所が消えないように）
+    if (!wq.length) { setState(r.state); if (job.reload !== false) render(); }
+    job.res(r.result); pump();
+  }).catch(function (e) { wqBusy = false; toast('保存できませんでした：' + e.message, true); job.rej(e); load(); });
+}
+function showSaving() { var el = $('saving'); if (el) el.textContent = (wqBusy || wq.length) ? '保存中…' : '保存済み'; }
+
+// ---------- 計算（サーバーと同じ決まり。入力直後の表示用） ----------
+function R() { return S.st.rules; }
+function n_(v) { if (v === '' || v == null) return null; var x = Number(String(v).replace(/[%％]/g, '')); return isNaN(x) ? null : x; }
+function r1(x) { return Math.round(x * 10) / 10; }
+function calc(sh) {
+  var sums = { mid: 0, pt1: 0, pt2: 0, ptF: 0 }, filled = { mid: 0, pt1: 0, pt2: 0, ptF: 0 }, ratio = { A: 0, B: 0, C: 0 }, wsum = 0, n = 0;
+  sh.items.forEach(function (it) {
+    var w = n_(it.weight); if (!w) return; n++; wsum += w; if (ratio[it.tag] != null) ratio[it.tag] += w;
+    ['mid', 'pt1', 'pt2', 'ptF'].forEach(function (k) { var v = n_(it[k]); if (it[k] !== '' && v != null) { sums[k] += v * w / 100; filled[k]++; } });
+  });
+  function tot(k) { return filled[k] ? r1(sums[k]) : ''; }
+  var t = { mid: tot('mid'), pt1: tot('pt1'), pt2: tot('pt2'), ptF: tot('ptF') };
+  var total = t.ptF !== '' ? t.ptF : t.pt2 !== '' ? t.pt2 : t.pt1 !== '' ? t.pt1 : '';
+  var after = total === '' ? '' : r1(total + (n_(sh.circlePt) || 0) + (n_(sh.adjPt) || 0));
+  var rk = rankOf(after);
+  var rkey = sh.newcomer === 'TRUE' ? '入社1年未満' : sh.role === 'パート' ? '一般' : sh.role;
+  var need = R().ratio[rkey] || null;
+  return { mid: t.mid, pt1: t.pt1, pt2: t.pt2, ptF: t.ptF, total: total, after: after, rank: rk ? rk[1] : '', rankPt: rk ? rk[2] : '', ratio: ratio, need: need, rkey: rkey,
+    ratioOk: !need || (ratio.A === need[0] && ratio.B === need[1] && ratio.C === need[2]), wsum: wsum, n: n, filled: filled };
+}
+function rankOf(v) { if (v === '' || v == null) return null; var rs = R().ranks; for (var i = 0; i < rs.length; i++) if (v >= rs[i][0]) return rs[i]; return [0, '80未満', 0]; }
+function testToPt(a) { return a == null || a === '' ? '' : a >= 98 ? 120 : a >= 95 ? 115 : a >= 90 ? 110 : a >= 85 ? 105 : a >= 80 ? 100 : a >= 75 ? 95 : a >= 70 ? 90 : a >= 65 ? 85 : a >= 60 ? 80 : 75; }
+function testAvg(sh) { var xs = sh.tests.map(function (t) { return n_(t.score); }).filter(function (x) { return x != null; }); return xs.length ? r1(xs.reduce(function (a, b) { return a + b; }, 0) / xs.length) : ''; }
+function behAvg(sh, lvl) {
+  var xs = R().beh.map(function (b) { var r = sh.beh[b[0]]; return r ? n_(r[lvl]) : null; }).filter(function (x) { return x != null; });
+  return xs.length ? Math.round(xs.reduce(function (a, b) { return a + b; }, 0) / xs.length * 100) / 100 : '';
+}
+function staff(id) { return S.st.staff.filter(function (s) { return s.id === id; })[0]; }
+function sname(id) { var s = staff(id); return s ? s.name : ''; }
+function period(id) { return S.st.periods.filter(function (p) { return p.id === id; })[0]; }
+function months(p) {
+  if (!p || !p.start || !p.end) return [];
+  var out = [], y = +p.start.slice(0, 4), m = +p.start.slice(5, 7), ey = +p.end.slice(0, 4), em = +p.end.slice(5, 7), g = 0;
+  while ((y < ey || (y === ey && m <= em)) && g++ < 24) { out.push(y + '-' + ('0' + m).slice(-2)); m++; if (m > 12) { m = 1; y++; } }
+  return out;
+}
+function shortDept(d) { return String(d || '').replace(/（(.+?)支店）/, '$1').replace('販売課', '販売'); }
+
+// ---------- 画面 ----------
+function render() {
+  if (!S.token) return renderLogin();
+  if (!S.st) { $('app').innerHTML = '<div class="login">' + (S.err ? '<p>' + esc(S.err) + '</p><button class="btn" onclick="logout()">ログアウト</button>' : '読み込み中…') + '</div>'; return; }
+  var me = S.st.me, tabs = [['list', '評価シート一覧'], ['beh', '行動評価一覧'], ['test', 'テスト平均点'], ['hist', '過去の合計・号俸']];
+  if (!me.viewAll) tabs = [['list', '自分の評価シート'], ['hist', '過去の合計・号俸']];
+  if (me.isAdmin) tabs.push(['admin', '管理'], ['log', '変更ログ']);
+  var h = '<header><div class="brand">人事評価アプリ</div><nav>' + tabs.map(function (t) {
+    return '<button class="' + (S.tab === t[0] && !S.sheetId ? 'on' : '') + '" onclick="go(\'' + t[0] + '\')">' + t[1] + '</button>';
+  }).join('') + '</nav><select onchange="pickPeriod(this.value)">' + S.st.periods.map(function (p) {
+    return '<option value="' + p.id + '"' + (p.id === S.periodId ? ' selected' : '') + '>' + esc(p.name) + '</option>';
+  }).join('') + '</select><div class="who"><span id="saving" class="saving"></span>' + esc(me.name) + '（' + esc(me.role) + (me.isAdmin ? '・管理者' : '') + '）<button class="btn small" onclick="logout()">ログアウト</button></div></header><main>';
+  if (!S.st.periods.length) h += '<p class="lead">半期がまだありません。' + (me.isAdmin ? '「管理」で作ってください。' : '') + '</p>';
+  if (S.sheetId) h += viewSheet();
+  else if (S.tab === 'list') h += viewList();
+  else if (S.tab === 'beh') h += viewBeh();
+  else if (S.tab === 'test') h += viewTest();
+  else if (S.tab === 'hist') h += viewHist();
+  else if (S.tab === 'admin') h += viewAdmin();
+  else if (S.tab === 'log') h += viewLog();
+  $('app').innerHTML = h + '</main>';
+  showSaving();
+}
+function go(t) { S.tab = t; S.sheetId = ''; render(); window.scrollTo(0, 0); }
+function pickPeriod(id) { S.periodId = id; S.sheetId = ''; load(); }
+function openSheet(id) { S.sheetId = id; render(); window.scrollTo(0, 0); }
+
+// ---- 一覧 ----
+function visibleSheets() {
+  var f = S.f, q = f.q.trim();
+  return S.st.sheets.filter(function (sh) {
+    if (f.dept && sh.dept !== f.dept) return false;
+    if (f.ev && [sh.eval1, sh.eval2, sh.evalF].indexOf(f.ev) < 0) return false;
+    if (q && (sname(sh.staffId) + (staff(sh.staffId) || {}).kana).indexOf(q) < 0) return false;
+    return true;
+  });
+}
+var ROLE_ORDER = ['取締役', '執行役員', '部長', '課長', '係長', '主任', 'エキスパート', '一般', 'パート', ''];
+function sortVal(sh, k) {
+  var c = calc(sh);
+  if (k === 'name') return (staff(sh.staffId) || {}).kana || sname(sh.staffId);
+  if (k === 'dept') return sh.dept + '|' + String(1e6 + (+sh.order || 0));
+  if (k === 'role') return ROLE_ORDER.indexOf(sh.role);
+  if (k === 'eval1' || k === 'eval2' || k === 'evalF') return sname(sh[k]);
+  if (k === 'test') return testAvg(sh);
+  if (k === 'order') return +sh.order || 0;
+  return c[k];
+}
+function sortSheets(list) {
+  var k = S.sort.k, d = S.sort.d;
+  return list.slice().sort(function (a, b) {
+    var x = sortVal(a, k), y = sortVal(b, k);
+    if (x === '' || x == null) return 1; if (y === '' || y == null) return -1;
+    return (x > y ? 1 : x < y ? -1 : 0) * d;
+  });
+}
+function th(k, label, cls) { var on = S.sort.k === k; return '<th class="sort ' + (cls || '') + '" onclick="sortBy(\'' + k + '\')">' + label + (on ? (S.sort.d > 0 ? ' ▲' : ' ▼') : '') + '</th>'; }
+function sortBy(k) { if (S.sort.k === k) S.sort.d *= -1; else S.sort = { k: k, d: 1 }; render(); }
+function setF(k, v) { S.f[k] = v; render(); if (k === 'q') { var el = $('fq'); if (el) { el.focus(); el.setSelectionRange(v.length, v.length); } } }
+
+function viewList() {
+  var me = S.st.me;
+  if (!me.viewAll) {
+    var mine = S.st.sheets.filter(function (s) { return s.staffId === me.id; });
+    if (mine.length === 1) { S.sheetId = mine[0].id; return viewSheet(); }
+  }
+  var list = sortSheets(visibleSheets());
+  var depts = {}, evs = {};
+  S.st.sheets.forEach(function (sh) { depts[sh.dept] = 1; [sh.eval1, sh.eval2, sh.evalF].forEach(function (e) { if (e) evs[e] = 1; }); });
+  var h = '<div class="bar"><h2 style="margin:0">評価シート一覧</h2><span class="muted">' + list.length + '人</span>' +
+    '<select onchange="setF(\'dept\',this.value)"><option value="">部署：すべて</option>' + Object.keys(depts).sort().map(function (d) { return '<option' + (S.f.dept === d ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('') + '</select>' +
+    '<select onchange="setF(\'ev\',this.value)"><option value="">評価者：すべて</option>' + Object.keys(evs).map(function (id) { return '<option value="' + id + '"' + (S.f.ev === id ? ' selected' : '') + '>' + esc(sname(id)) + '</option>'; }).join('') + '</select>' +
+    '<input id="fq" type="text" placeholder="名前で探す" value="' + esc(S.f.q) + '" oninput="setF(\'q\',this.value)">' +
+    (me.id ? '<button class="btn small ' + (S.f.ev === me.id ? 'on' : '') + '" onclick="setF(\'ev\',S.f.ev===S.st.me.id?\'\':S.st.me.id)">自分が評価者</button>' : '') + '</div>';
+  h += '<div class="wrap"><table><thead><tr>' + th('name', '名前') + th('dept', '部署') + th('role', '役職') + th('eval1', '1次') + th('eval2', '2次') + th('evalF', '最終') +
+    '<th>A/B/C</th><th class="num">ウエイト計</th>' + th('mid', '中間', 'num') + th('pt1', '1次合計', 'num') + th('pt2', '2次合計', 'num') + th('ptF', '最終合計', 'num') +
+    '<th class="num">サークル</th><th class="num">加点減点</th>' + th('after', '加点減点後', 'num') + th('rankPt', 'ランク') + th('test', 'テスト平均', 'num') + '<th class="num">号俸</th></tr></thead><tbody>';
+  list.forEach(function (sh) {
+    var c = calc(sh), ta = testAvg(sh), needTest = sh.testTarget === 'TRUE';
+    h += '<tr class="click" onclick="openSheet(\'' + sh.id + '\')"><td><b>' + esc(sname(sh.staffId)) + '</b>' + (sh.canEdit ? '' : ' <span class="muted">閲覧</span>') + '</td><td>' + esc(shortDept(sh.dept)) + '</td><td>' + esc(sh.role) + (sh.newcomer === 'TRUE' ? ' <span class="pill">1年未満</span>' : '') + '</td>' +
+      '<td>' + esc(sname(sh.eval1)) + '</td><td>' + esc(sname(sh.eval2)) + '</td><td>' + esc(sname(sh.evalF)) + '</td>' +
+      '<td class="' + (c.ratioOk ? '' : 'warn') + '" title="' + (c.need ? c.rkey + 'の決まり：' + c.need.join('/') : '') + '">' + c.ratio.A + '/' + c.ratio.B + '/' + c.ratio.C + '</td>' +
+      '<td class="num ' + (c.wsum === 100 ? '' : 'warn') + '">' + c.wsum + '%</td>' +
+      '<td class="num">' + c.mid + '</td><td class="num">' + c.pt1 + '</td><td class="num">' + c.pt2 + '</td><td class="num">' + c.ptF + '</td>' +
+      '<td class="num">' + (sh.circle === 'TRUE' ? (sh.circlePt || 0) : '') + '</td><td class="num">' + esc(sh.adjPt) + '</td>' +
+      '<td class="num"><b>' + c.after + '</b></td><td class="rank">' + c.rank + (c.rankPt !== '' ? ' <span class="muted">' + c.rankPt + '</span>' : '') + '</td>' +
+      '<td class="num ' + (needTest && ta === '' ? 'warn' : '') + '">' + (ta === '' ? (needTest ? '未入力' : '') : ta + '点→' + testToPt(ta)) + '</td>' +
+      '<td class="num">' + (sh.goho && sh.goho.up !== '' ? (sh.goho.up > 0 ? '+' : '') + sh.goho.up : '') + '</td></tr>';
+  });
+  return h + '</tbody></table></div><p class="muted">赤字：A/B/C比率が役職の決まりと違う／ウエイト合計が100%でない／テスト対象なのに未入力。合計は最終→2次→1次の順で入っているものを使います。</p>';
+}
+
+// ---- シート詳細 ----
+function curSheet() { return S.st.sheets.filter(function (s) { return s.id === S.sheetId; })[0]; }
+function inp(kind, id, field, val, attrs) {
+  return '<input class="cell" type="text" value="' + esc(val) + '" ' + (attrs || '') + ' onchange="save(\'' + kind + '\',\'' + id + '\',\'' + field + '\',this.value)">';
+}
+function ta(kind, id, field, val, attrs) {
+  return '<textarea class="cell" ' + (attrs || '') + ' onchange="save(\'' + kind + '\',\'' + id + '\',\'' + field + '\',this.value)">' + esc(val) + '</textarea>';
+}
+function ptSel(it, k, ro) {
+  if (ro) return esc(it[k]);
+  var rates = R().rates, v = it[k], opts = '<option value=""></option>' + rates.map(function (r) { return '<option' + (String(r) === String(v) ? ' selected' : '') + '>' + r + '</option>'; }).join('');
+  if (v !== '' && rates.map(String).indexOf(String(v)) < 0) opts += '<option selected>' + esc(v) + '</option>';
+  return '<select class="cell" onchange="save(\'item\',\'' + it.id + '\',\'' + k + '\',this.value)">' + opts + '<option value="__">数字で入れる…</option></select>';
+}
+function viewSheet() {
+  var sh = curSheet();
+  if (!sh) { S.sheetId = ''; return viewList(); }
+  var ro = !sh.canEdit, c = calc(sh), p = period(sh.periodId), st = staff(sh.staffId) || {}, me = S.st.me;
+  var h = '<div class="bar">' + (me.viewAll ? '<button class="btn small" onclick="openSheet(\'\')">← 一覧へ</button>' : '') +
+    '<h2 style="margin:0">' + esc(st.name) + ' <span class="muted">' + esc(sh.dept) + '・' + esc(sh.role) + '・' + esc(p ? p.name : '') + '</span></h2>' +
+    (ro ? '<span class="pill">閲覧のみ</span>' : '<span class="pill" style="background:var(--done-soft)">直せます</span>') + '</div>';
+  h += '<div class="muted">1次評価者：' + esc(sname(sh.eval1) || '未設定') + '　2次：' + esc(sname(sh.eval2) || '未設定') + '　最終：' + esc(sname(sh.evalF) || '未設定') + '</div>';
+  // 数字のまとめ
+  h += '<div class="cards">' +
+    card('中間合計', c.mid) + card('1次合計', c.pt1) + card('2次合計', c.pt2) + card('最終合計', c.ptF) +
+    card('加点減点後', c.after, c.rank ? 'ランク ' + c.rank + '（' + c.rankPt + 'pt）' : '') +
+    card('A/B/C比率', c.ratio.A + '/' + c.ratio.B + '/' + c.ratio.C, c.need ? c.rkey + 'の決まり ' + c.need.join('/') : '', !c.ratioOk) +
+    card('ウエイト合計', c.wsum + '%', '', c.wsum !== 100) +
+    (sh.goho ? card('号俸の上がり方', sh.goho.up === '' ? '–' : (sh.goho.up > 0 ? '+' : '') + sh.goho.up, sh.goho.sum === '' ? '上期・下期のランクがそろうと出ます' : '2期の合計 ' + sh.goho.sum + 'pt（' + sh.goho.table + 'の表）') : '') + '</div>';
+  h += '<div class="box"><b>6ヵ月後のゴール（KGI）</b>' + (ro ? '<div style="white-space:pre-wrap">' + esc(sh.kgi) + '</div>' : '<textarea class="cell" style="width:100%;min-height:50px;border-color:var(--line)" onchange="save(\'sheet\',\'' + sh.id + '\',\'kgi\',this.value)">' + esc(sh.kgi) + '</textarea>') + '</div>';
+  // 項目の表
+  var labels = R().rateLabels, rates = R().rates;
+  h += '<div class="wrap" style="max-height:none"><table><thead><tr><th></th><th>区分</th><th>評価項目</th><th>評価基準</th><th class="num">ウエイト</th>' +
+    labels.map(function (l, i) { return '<th class="rng">' + l + '<div class="muted">' + rates[i] + 'pt</div></th>'; }).join('') +
+    '<th>中間</th><th>1次</th><th>2次</th><th>最終</th>' + (ro ? '' : '<th></th>') + '</tr></thead><tbody>';
+  sh.items.forEach(function (it, idx) {
+    var cmOpen = S.cmOpen === it.id;
+    h += '<tr><td class="num muted">' + (idx + 1) + '</td><td class="tag' + it.tag + '">' + (ro ? esc(it.tag) : '<select class="cell" style="min-width:44px" onchange="save(\'item\',\'' + it.id + '\',\'tag\',this.value)">' + ['A', 'B', 'C'].map(function (t) { return '<option' + (it.tag === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select>') + '</td>' +
+      '<td style="min-width:180px">' + (ro ? esc(it.name) : ta('item', it.id, 'name', it.name)) + '</td>' +
+      '<td style="min-width:220px;max-width:320px">' + (ro ? '<div style="white-space:pre-wrap;font-size:12px">' + esc(it.basis) + '</div>' : ta('item', it.id, 'basis', it.basis, 'style="font-size:12px"')) + '</td>' +
+      '<td class="num">' + (ro ? esc(it.weight) + '%' : inp('item', it.id, 'weight', it.weight, 'style="width:56px;text-align:right"')) + '</td>';
+    for (var i = 1; i <= 10; i++) {
+      var hit = [it.mid, it.pt1, it.pt2, it.ptF].some(function (v) { return String(v) === String(rates[i - 1]); });
+      h += '<td class="rng' + (String(it.ptF || it.pt2 || it.pt1 || it.mid) === String(rates[i - 1]) ? ' hit' : '') + '">' + (ro ? '<div style="white-space:pre-wrap">' + esc(it['r' + i]) + '</div>' : ta('item', it.id, 'r' + i, it['r' + i], 'style="font-size:12px"')) + '</td>';
+    }
+    h += '<td>' + ptSel(it, 'mid', ro) + '</td><td>' + ptSel(it, 'pt1', ro) + '</td><td>' + ptSel(it, 'pt2', ro) + '</td><td>' + ptSel(it, 'ptF', ro) + '</td>' +
+      (ro ? '' : '<td style="white-space:nowrap"><button class="btn small" title="上へ" onclick="call(\'moveItem\',{id:\'' + it.id + '\',dir:-1})">↑</button><button class="btn small" title="下へ" onclick="call(\'moveItem\',{id:\'' + it.id + '\',dir:1})">↓</button> <button class="btn small danger" onclick="delItem(\'' + it.id + '\')">削除</button></td>') + '</tr>';
+    // コメント（2種類）
+    var hasCm = it.commentPub || it.commentPriv;
+    h += '<tr><td></td><td colspan="' + (ro ? 18 : 19) + '" style="background:#FAFBF8">' +
+      (cmOpen || hasCm ? '<div class="cm"><div><label>コメント（本人も見られる）</label>' + (ro ? '<div style="white-space:pre-wrap">' + esc(it.commentPub) + '</div>' : ta('item', it.id, 'commentPub', it.commentPub, 'style="border-color:var(--line);min-height:44px"')) + '</div>' +
+        (sh.canSeePriv ? '<div class="priv"><label>コメント（評価者だけ）</label>' + (ro ? '<div style="white-space:pre-wrap">' + esc(it.commentPriv) + '</div>' : ta('item', it.id, 'commentPriv', it.commentPriv, 'style="border-color:var(--line);min-height:44px"')) + '</div>' : '<div></div>') + '</div>'
+        : (ro ? '' : '<button class="btn small" onclick="S.cmOpen=\'' + it.id + '\';render()">＋ コメントを書く</button>')) + '</td></tr>';
+  });
+  h += '<tr><td></td><td colspan="3"><b>合計</b></td><td class="num ' + (c.wsum === 100 ? '' : 'warn') + '"><b>' + c.wsum + '%</b></td><td colspan="10"></td>' +
+    '<td class="num"><b>' + c.mid + '</b></td><td class="num"><b>' + c.pt1 + '</b></td><td class="num"><b>' + c.pt2 + '</b></td><td class="num"><b>' + c.ptF + '</b></td>' + (ro ? '' : '<td></td>') + '</tr>';
+  h += '</tbody></table></div>';
+  if (!ro) h += '<div class="bar" style="margin-top:8px"><button class="btn" onclick="call(\'addItem\',{sheetId:\'' + sh.id + '\'})">＋ 項目を足す</button><button class="btn" onclick="copyDlg()">部下のシートへ項目を写す…</button></div>';
+
+  // 加点減点
+  h += '<h3>加点・減点</h3><div class="wrap" style="max-height:none"><table><tbody>' +
+    '<tr><th>サークル加点減点</th><td>' + (sh.circle === 'TRUE' ? (ro ? esc(sh.circlePt) : inp('sheet', sh.id, 'circlePt', sh.circlePt, 'style="width:70px"')) : '<span class="muted">サークルのリーダーではない</span>') + '</td><td style="min-width:360px">' + (sh.circle === 'TRUE' ? (ro ? esc(sh.circleNote) : inp('sheet', sh.id, 'circleNote', sh.circleNote, 'placeholder="理由"')) : '') + '</td>' +
+    '<td>' + (ro ? '' : '<label><input type="checkbox"' + (sh.circle === 'TRUE' ? ' checked' : '') + ' onchange="save(\'sheet\',\'' + sh.id + '\',\'circle\',this.checked)"> サークルのリーダー</label>') + '</td></tr>' +
+    '<tr><th>加点減点</th><td>' + (ro ? esc(sh.adjPt) : inp('sheet', sh.id, 'adjPt', sh.adjPt, 'style="width:70px"')) + '</td><td>' + (ro ? esc(sh.adjNote) : inp('sheet', sh.id, 'adjNote', sh.adjNote, 'placeholder="理由（制度外の加点は2次評価者と合意）"')) + '</td><td></td></tr>' +
+    '<tr><th>シートの設定</th><td colspan="3">' + (ro ? '' : '<label><input type="checkbox"' + (sh.newcomer === 'TRUE' ? ' checked' : '') + ' onchange="save(\'sheet\',\'' + sh.id + '\',\'newcomer\',this.checked)"> 入社1年未満（比率 10/60/30）</label>　<label><input type="checkbox"' + (sh.testTarget === 'TRUE' ? ' checked' : '') + ' onchange="save(\'sheet\',\'' + sh.id + '\',\'testTarget\',this.checked)"> テスト必須</label>') + '</td></tr>' +
+    '</tbody></table></div>';
+
+  // 全体コメント
+  h += '<h3>全体のコメント</h3><div class="box cm"><div><label>本人も見られる</label>' + (ro ? '<div style="white-space:pre-wrap">' + esc(sh.commentPub) + '</div>' : ta('sheet', sh.id, 'commentPub', sh.commentPub, 'style="border-color:var(--line);min-height:70px"')) + '</div>' +
+    (sh.canSeePriv ? '<div class="priv"><label>評価者だけ</label>' + (ro ? '<div style="white-space:pre-wrap">' + esc(sh.commentPriv) + '</div>' : ta('sheet', sh.id, 'commentPriv', sh.commentPriv, 'style="border-color:var(--line);min-height:70px"')) + '</div>' : '<div></div>') + '</div>';
+
+  // 行動評価
+  h += '<h3>行動評価 <span class="muted">4：常にできている／3：できている／2：あまりできていない／1：全くできていない</span></h3><div class="wrap" style="max-height:none"><table><thead><tr><th>項目</th><th>1次</th><th>2次</th><th>最終</th></tr></thead><tbody>';
+  R().beh.forEach(function (b) {
+    var r = sh.beh[b[0]] || {};
+    h += '<tr><td>' + esc(b[0] + ' ' + b[1]) + '</td>' + ['s1', 's2', 'sF'].map(function (l) { return '<td>' + behCell(sh, b[0], l, r[l], ro) + '</td>'; }).join('') + '</tr>';
+  });
+  h += '<tr><td><b>平均</b></td><td class="num"><b>' + behAvg(sh, 's1') + '</b></td><td class="num"><b>' + behAvg(sh, 's2') + '</b></td><td class="num"><b>' + behAvg(sh, 'sF') + '</b></td></tr></tbody></table></div>';
+
+  // テスト
+  var ms = months(p);
+  h += '<h3>テストの点数' + (sh.testTarget === 'TRUE' ? ' <span class="pill">必須</span>' : '') + '</h3><div class="wrap" style="max-height:none"><table><thead><tr>' + ms.map(function (m) { return '<th>' + (+m.slice(5)) + '月</th>'; }).join('') + '<th>平均</th><th>→pt</th></tr></thead><tbody><tr>' +
+    ms.map(function (m) { var t = sh.tests.filter(function (x) { return x.month === m; })[0] || {}; return '<td>' + (ro ? esc(t.score) : '<input class="cell" style="width:60px" value="' + esc(t.score) + '" onchange="saveTest(\'' + sh.staffId + '\',\'' + m + '\',this.value)">') + '</td>'; }).join('') +
+    '<td class="num"><b>' + testAvg(sh) + '</b></td><td class="num">' + testToPt(testAvg(sh)) + '</td></tr></tbody></table></div>';
+  return h;
+}
+function card(label, v, sub, warn) { return '<div class="card' + (warn ? ' warn' : '') + '"><span class="muted">' + label + '</span><b>' + (v === '' || v == null ? '–' : esc(v)) + '</b>' + (sub ? '<span class="muted">' + esc(sub) + '</span>' : '') + '</div>'; }
+function behCell(sh, code, lvl, v, ro) {
+  if (ro) return esc(v || '');
+  return '<select class="cell" style="min-width:48px" onchange="saveBeh(\'' + sh.id + '\',\'' + code + '\',\'' + lvl + '\',this.value)"><option></option>' + ['4', '3', '2', '1'].map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select>';
+}
+
+// 保存（画面の中身を先に直してから送る）
+function save(kind, id, field, value) {
+  if (value === '__') { var x = prompt('数字を入れてください（例：102.5）'); if (x == null) { render(); return; } value = x; }
+  if (typeof value === 'boolean') value = value ? 'TRUE' : '';
+  var sh;
+  if (kind === 'item') { S.st.sheets.forEach(function (s) { s.items.forEach(function (it) { if (it.id === id) { it[field] = value; sh = s; } }); }); call('setItem', { id: id, field: field, value: value }, false).then(rerenderSoft); }
+  else { S.st.sheets.forEach(function (s) { if (s.id === id) { s[field] = value; sh = s; } }); call('setSheet', { id: id, field: field, value: value }, false).then(rerenderSoft); }
+  rerenderSoft();
+}
+function saveBeh(sheetId, code, lvl, v) {
+  S.st.sheets.forEach(function (s) { if (s.id === sheetId) { s.beh[code] = s.beh[code] || {}; s.beh[code][lvl] = v; } });
+  call('setBeh', { sheetId: sheetId, code: code, lvl: lvl, value: v }, false).then(rerenderSoft); rerenderSoft();
+}
+function saveTest(staffId, month, v) {
+  S.st.sheets.forEach(function (s) { if (s.staffId === staffId) { var t = s.tests.filter(function (x) { return x.month === month; })[0]; if (!t) s.tests.push({ month: month, score: v }); else t.score = v; } });
+  call('setTest', { staffId: staffId, month: month, score: v }, false).then(rerenderSoft); rerenderSoft();
+}
+// 入力中の欄を残したまま画面を直す（フォーカスとスクロールを戻す）
+function rerenderSoft() {
+  var a = document.activeElement, sx = window.scrollX, sy = window.scrollY, key = null, wraps = [];
+  document.querySelectorAll('.wrap').forEach(function (w) { wraps.push([w.scrollLeft, w.scrollTop]); });
+  if (a && a.getAttribute && a.getAttribute('onchange')) key = a.getAttribute('onchange');
+  if (a && a.tagName === 'TEXTAREA' && key) return; // 書いている途中は描き直さない
+  render();
+  document.querySelectorAll('.wrap').forEach(function (w, i) { if (wraps[i]) { w.scrollLeft = wraps[i][0]; w.scrollTop = wraps[i][1]; } });
+  window.scrollTo(sx, sy);
+}
+function delItem(id) { if (confirm('この項目を消しますか？（変更ログに残ります）')) call('delItem', { id: id }); }
+
+// 部下のシートへ項目を写す
+function copyDlg() {
+  var sh = curSheet(), me = S.st.me;
+  var targets = S.st.sheets.filter(function (s) { return s.id !== sh.id && s.canEdit; });
+  var h = '<div class="back" onclick="if(event.target===this)closeDlg()"><div class="dlg"><h3 style="margin-top:0">項目を部下のシートへ写す</h3><p class="muted">評価項目・基準・10段階を写します（ptとコメントは写しません）。</p>' +
+    '<b>写す項目</b><div>' + sh.items.map(function (it) { return '<label style="display:block"><input type="checkbox" class="ci" value="' + it.id + '"> ' + esc(it.name) + '（' + esc(it.weight) + '%）</label>'; }).join('') + '</div>' +
+    '<b style="display:block;margin-top:10px">写し先</b><div>' + targets.map(function (s) { return '<label style="display:inline-block;margin-right:14px"><input type="checkbox" class="ct" value="' + s.id + '"> ' + esc(sname(s.staffId)) + '</label>'; }).join('') + '</div>' +
+    '<label style="display:block;margin-top:10px"><input type="checkbox" id="cw"> ウエイトも写す</label>' +
+    '<div class="bar" style="margin-top:14px"><button class="btn primary" onclick="doCopy()">写す</button><button class="btn" onclick="closeDlg()">やめる</button></div></div></div>';
+  $('modal').innerHTML = h;
+}
+function closeDlg() { $('modal').innerHTML = ''; }
+function doCopy() {
+  var ids = [].map.call(document.querySelectorAll('.ci:checked'), function (x) { return x.value; }), to = [].map.call(document.querySelectorAll('.ct:checked'), function (x) { return x.value; });
+  if (!ids.length || !to.length) return toast('写す項目と写し先を選んでください', true);
+  call('copyItems', { itemIds: ids, toSheetIds: to, withWeight: $('cw').checked }).then(function (r) { toast(r.copied + '件写しました'); });
+  closeDlg();
+}
+
+// ---- 行動評価一覧 ----
+function viewBeh() {
+  var list = sortSheets(visibleSheets()), lv = S.behLvl, L = { s1: '1次', s2: '2次', sF: '最終' };
+  var h = '<div class="bar"><h2 style="margin:0">行動評価一覧</h2>' + ['s1', 's2', 'sF'].map(function (k) { return '<button class="btn small ' + (lv === k ? 'on' : '') + '" onclick="S.behLvl=\'' + k + '\';render()">' + L[k] + '</button>'; }).join('') +
+    '<span class="muted">4：常にできている／3：できている／2：あまりできていない／1：全くできていない</span></div>';
+  h += '<div class="wrap"><table><thead><tr>' + th('name', '名前') + th('dept', '部署') + R().beh.map(function (b) { return '<th title="' + esc(b[1]) + '">' + esc(b[0]) + '<div class="muted">' + esc(b[1]) + '</div></th>'; }).join('') + '<th class="num">平均</th></tr></thead><tbody>';
+  list.forEach(function (sh) {
+    h += '<tr><td><a href="#" onclick="openSheet(\'' + sh.id + '\');return false"><b>' + esc(sname(sh.staffId)) + '</b></a></td><td>' + esc(shortDept(sh.dept)) + '</td>' +
+      R().beh.map(function (b) { return '<td>' + behCell(sh, b[0], lv, (sh.beh[b[0]] || {})[lv], !sh.canEdit) + '</td>'; }).join('') + '<td class="num"><b>' + behAvg(sh, lv) + '</b></td></tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+
+// ---- テスト平均点 ----
+function viewTest() {
+  var list = sortSheets(visibleSheets()), ms = months(period(S.periodId));
+  var h = '<div class="bar"><h2 style="margin:0">テスト平均点</h2><span class="muted">一般は必須。点数→pt：98点以上120／95〜115／90〜110／85〜105／80〜100／75〜95／70〜90／65〜85／60〜80／それ未満75</span></div>';
+  h += '<div class="wrap"><table><thead><tr>' + th('name', '名前') + th('dept', '部署') + th('role', '役職') + ms.map(function (m) { return '<th>' + (+m.slice(5)) + '月</th>'; }).join('') + th('test', '平均', 'num') + '<th class="num">→pt</th></tr></thead><tbody>';
+  list.forEach(function (sh) {
+    var a = testAvg(sh), need = sh.testTarget === 'TRUE';
+    h += '<tr><td><b>' + esc(sname(sh.staffId)) + '</b>' + (need ? ' <span class="pill">必須</span>' : '') + '</td><td>' + esc(shortDept(sh.dept)) + '</td><td>' + esc(sh.role) + '</td>' +
+      ms.map(function (m) { var t = sh.tests.filter(function (x) { return x.month === m; })[0] || {}; return '<td title="' + esc(t.source || '') + '">' + (sh.canEdit ? '<input class="cell" style="width:56px" value="' + esc(t.score) + '" onchange="saveTest(\'' + sh.staffId + '\',\'' + m + '\',this.value)">' : esc(t.score)) + '</td>'; }).join('') +
+      '<td class="num ' + (need && a === '' ? 'warn' : '') + '"><b>' + (a === '' ? (need ? '未入力' : '') : a) + '</b></td><td class="num">' + testToPt(a) + '</td></tr>';
+  });
+  return h + '</tbody></table></div><p class="muted">カオナビから取った点数は、AIがまとめて入れます（欄にマウスを置くと「カオナビ」か「手入力」かが出ます）。</p>';
+}
+
+// ---- 過去の合計・号俸 ----
+function viewHist() {
+  var ps = S.st.periods, by = {};
+  S.st.hist.forEach(function (x) { (by[x.staffId] = by[x.staffId] || {})[x.periodId] = x; });
+  var ids = Object.keys(by).sort(function (a, b) { var x = staff(a) || {}, y = staff(b) || {}; return (+x.order || 0) - (+y.order || 0); });
+  var h = '<h2>過去の合計ポイント</h2><p class="lead">半期ごとの加点減点後ptとランク、その時の役職・所属。号俸の上がり方は同じ年度の上期＋下期のランクptの合計で決まります。</p>';
+  h += '<div class="wrap"><table><thead><tr><th>名前</th>' + ps.map(function (p) { return '<th>' + esc(p.name) + '</th>'; }).join('') + '</tr></thead><tbody>';
+  ids.forEach(function (id) {
+    h += '<tr><td><b>' + esc(sname(id)) + '</b></td>' + ps.map(function (p) {
+      var r = by[id][p.id];
+      return '<td>' + (r ? '<b>' + (r.after === '' ? '–' : r.after) + '</b> <span class="rank">' + esc(r.rank) + '</span><div class="muted">' + esc(r.role || '') + '・' + esc(shortDept(r.dept)) + '</div>' : '<span class="muted">–</span>') + '</td>';
+    }).join('') + '</tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+
+// ---- 管理 ----
+function viewAdmin() {
+  var st = S.st, roles = st.rules.roles, depts = [];
+  st.rules.org.forEach(function (g) { g.depts.forEach(function (d) { depts.push(d); }); });
+  function sel(id, field, v, opts, kind) {
+    return '<select class="cell" onchange="' + (kind === 'sheet' ? 'save(\'sheet\',\'' + id + '\',\'' + field + '\',this.value)' : 'saveStaff(\'' + id + '\',\'' + field + '\',this.value)') + '"><option value=""></option>' +
+      opts.map(function (o) { var val = Array.isArray(o) ? o[0] : o, lab = Array.isArray(o) ? o[1] : o; return '<option value="' + esc(val) + '"' + (String(val) === String(v) ? ' selected' : '') + '>' + esc(lab) + '</option>'; }).join('') + '</select>';
+  }
+  var evOpts = st.staff.filter(function (s) { return ['取締役', '執行役員', '部長', '課長', '係長'].indexOf(s.role) >= 0 && s.active !== 'FALSE'; }).map(function (s) { return [s.id, s.name + '（' + s.role + '）']; });
+  var h = '<h2>管理</h2><p class="lead">社員・半期・評価者の割り当て。ここを直せるのは管理者だけです。</p>';
+  // 評価者の割り当て（この半期）
+  h += '<h3>この半期の評価シートと評価者</h3><div class="wrap" style="max-height:60vh"><table><thead><tr><th>名前</th><th>部署（この半期）</th><th>役職（この半期）</th><th>1次評価者</th><th>2次評価者</th><th>最終評価者</th><th>並び</th><th></th></tr></thead><tbody>';
+  sortSheets(st.sheets).forEach(function (sh) {
+    h += '<tr><td><b>' + esc(sname(sh.staffId)) + '</b></td><td>' + sel(sh.id, 'dept', sh.dept, depts, 'sheet') + '</td><td>' + sel(sh.id, 'role', sh.role, roles, 'sheet') + '</td>' +
+      '<td>' + sel(sh.id, 'eval1', sh.eval1, evOpts, 'sheet') + '</td><td>' + sel(sh.id, 'eval2', sh.eval2, evOpts, 'sheet') + '</td><td>' + sel(sh.id, 'evalF', sh.evalF, evOpts, 'sheet') + '</td>' +
+      '<td>' + inp('sheet', sh.id, 'order', sh.order, 'style="width:60px"') + '</td><td><button class="btn small danger" onclick="if(confirm(\'このシートを消しますか？\'))call(\'delSheet\',{id:\'' + sh.id + '\'})">削除</button></td></tr>';
+  });
+  h += '</tbody></table></div><div class="bar" style="margin-top:8px"><button class="btn" onclick="createDlg()">この半期にシートを作る…</button></div>';
+  // 社員
+  h += '<h3>社員（' + st.staff.length + '人）</h3><p class="muted">メールはPJ見える化アプリのログインと同じもの。メールが入っている人だけがログインして見られます。</p><div class="wrap" style="max-height:60vh"><table><thead><tr><th>名前</th><th>ふりがな</th><th>メール</th><th>会社</th><th>部署</th><th>役職</th><th>入社日</th><th>在籍</th><th>管理者</th><th>並び</th></tr></thead><tbody>';
+  st.staff.forEach(function (s) {
+    h += '<tr><td>' + sinp(s, 'name') + '</td><td>' + sinp(s, 'kana') + '</td><td>' + sinp(s, 'email', 'style="min-width:200px"') + '</td><td>' + sel(s.id, 'company', s.company, ['庄内タイヤ', 'SHONE']) + '</td>' +
+      '<td>' + sel(s.id, 'dept', s.dept, depts) + '</td><td>' + sel(s.id, 'role', s.role, roles) + '</td><td>' + sinp(s, 'joined', 'placeholder="2026-04-01" style="width:100px"') + '</td>' +
+      '<td>' + sel(s.id, 'active', s.active, [['TRUE', '在籍'], ['FALSE', '退職']]) + '</td><td>' + sel(s.id, 'admin', s.admin, [['TRUE', '管理者']]) + '</td><td>' + sinp(s, 'order', 'style="width:60px"') + '</td></tr>';
+  });
+  h += '</tbody></table></div><div class="bar" style="margin-top:8px"><button class="btn" onclick="var n=prompt(\'名前\');if(n)call(\'saveStaff\',{name:n})">＋ 社員を足す</button></div>';
+  // 半期
+  h += '<h3>半期</h3><div class="wrap" style="max-height:none"><table><thead><tr><th>名前</th><th>年度</th><th>上期/下期</th><th>開始</th><th>終了</th><th>並び</th></tr></thead><tbody>';
+  st.periods.forEach(function (p) {
+    h += '<tr>' + ['name', 'fiscal', 'half', 'start', 'end', 'order'].map(function (k) { return '<td><input class="cell" value="' + esc(p[k]) + '" onchange="call(\'savePeriod\',{id:\'' + p.id + '\',' + k + ':this.value})"></td>'; }).join('') + '</tr>';
+  });
+  h += '</tbody></table></div><div class="bar" style="margin-top:8px"><button class="btn" onclick="var n=prompt(\'半期の名前（例：2027年4月-9月）\');if(n)call(\'savePeriod\',{name:n})">＋ 半期を足す</button><span class="muted">年度は「2026」のように、上期と下期で同じ値を入れると号俸が計算されます。開始・終了は 2026-10 の形。</span></div>';
+  return h;
+}
+function sinp(s, k, attrs) { return '<input class="cell" value="' + esc(s[k]) + '" ' + (attrs || '') + ' onchange="saveStaff(\'' + s.id + '\',\'' + k + '\',this.value)">'; }
+function saveStaff(id, k, v) { var p = { id: id }; p[k] = v; call('saveStaff', p); }
+function createDlg() {
+  var st = S.st, have = {}; st.sheets.forEach(function (s) { have[s.staffId] = 1; });
+  var cand = st.staff.filter(function (s) { return !have[s.id] && s.active !== 'FALSE'; });
+  var h = '<div class="back" onclick="if(event.target===this)closeDlg()"><div class="dlg"><h3 style="margin-top:0">この半期にシートを作る</h3>' +
+    '<div>' + (cand.length ? cand.map(function (s) { return '<label style="display:inline-block;margin-right:14px"><input type="checkbox" class="cs" value="' + s.id + '" checked> ' + esc(s.name) + '</label>'; }).join('') : '<span class="muted">全員分あります</span>') + '</div>' +
+    '<label style="display:block;margin-top:10px">前の半期から項目と評価者を写す：<select id="cf"><option value="">写さない</option>' + st.periods.filter(function (p) { return p.id !== S.periodId; }).map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select></label>' +
+    '<div class="bar" style="margin-top:14px"><button class="btn primary" onclick="doCreate()">作る</button><button class="btn" onclick="closeDlg()">やめる</button></div></div></div>';
+  $('modal').innerHTML = h;
+}
+function doCreate() {
+  var ids = [].map.call(document.querySelectorAll('.cs:checked'), function (x) { return x.value; });
+  call('createSheets', { periodId: S.periodId, staffIds: ids, fromPeriodId: $('cf').value }).then(function (r) { toast(r.made + '枚作りました'); });
+  closeDlg();
+}
+
+// ---- 変更ログ ----
+function viewLog() {
+  var h = '<h2>変更ログ</h2><p class="lead">新しい順に300件。</p><div class="wrap"><table><thead><tr><th>日時</th><th>誰が</th><th>何を</th><th>どこ</th><th>中身</th></tr></thead><tbody>';
+  S.st.log.forEach(function (l) {
+    var d = new Date(l.at);
+    h += '<tr><td style="white-space:nowrap">' + (isNaN(d) ? esc(l.at) : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2)) + '</td><td>' + esc(l.by) + '</td><td>' + esc(l.action) + '</td><td>' + esc(l.target) + '</td><td>' + esc(l.detail) + '</td></tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+
+// ---------- ログイン（PJ見える化アプリと同じアカウント） ----------
+function renderLogin() {
+  var L = S.login;
+  $('app').innerHTML = '<div class="login"><h2>人事評価アプリ</h2><p class="muted">PJ見える化アプリと同じメールアドレスでログインします。</p>' +
+    (L.step === 1 ? '<label>メールアドレス</label><input id="em" type="email" value="' + esc(L.email) + '" onkeydown="if(event.key===\'Enter\')sendCode()"><button class="btn primary" onclick="sendCode()">コードを送る</button>'
+      : '<p>' + esc(L.email) + ' に届いた6桁のコードを入れてください。</p><input id="cd" type="text" inputmode="numeric" maxlength="6" onkeydown="if(event.key===\'Enter\')verify()"><label style="display:block;margin-bottom:10px"><input type="checkbox" id="rm" checked> ログインしたままにする</label><button class="btn primary" onclick="verify()">ログイン</button> <button class="btn" onclick="S.login.step=1;render()">戻る</button>') +
+    '<p class="muted" style="margin-top:18px">アカウントが無い人は <a href="' + PJ_APP_URL + '" target="_blank">PJ見える化アプリ</a> の「新規登録」から申請してください。</p></div>';
+  var f = $(L.step === 1 ? 'em' : 'cd'); if (f) f.focus();
+}
+function sendCode() {
+  var em = $('em').value.trim(); if (!em) return;
+  S.login.email = em; busy(true);
+  post(PJ_API_URL, 'requestCode', [em]).then(function (r) { busy(false); if (!r.ok) return toast(r.msg, true); S.login.step = 2; render(); }).catch(function (e) { busy(false); toast(e.message, true); });
+}
+function verify() {
+  var cd = $('cd').value.trim(), rm = $('rm').checked; busy(true);
+  post(PJ_API_URL, 'verifyCode', [S.login.email, cd, rm]).then(function (r) {
+    busy(false); if (!r.ok) return toast(r.msg, true);
+    S.token = r.token; saveToken(r.token, rm); S.login = { step: 1, email: '' }; load();
+  }).catch(function (e) { busy(false); toast(e.message, true); });
+}
+function logout() {
+  if (!confirm('ログアウトしますか？（PJ見える化アプリもログアウトになります）')) return;
+  post(PJ_API_URL, 'logout', [S.token]).catch(function () { });
+  S.token = null; S.st = null; saveToken(null); render();
+}
+
+render();
+if (S.token) load();
+</script>
+</body>
+</html>

@@ -315,6 +315,22 @@ function quickUpdate(id, fields) {
   }
   return call('updateItem', { id: id, fields: fields });
 }
+// 工程・タスクを足す時も、先に画面に行を出してから裏で保存する（番号は画面側で決めてサーバーに渡す）
+function uuid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) { var r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+}
+function quickAdd(parentId, f) {
+  var p = byId(parentId), id = uuid(), me = S.st.me.email, now = new Date().toISOString();
+  if (p) {
+    var sib = S.st.items.filter(function (i) { return i.parentId === parentId; }).length;
+    S.st.items.push({ id: id, parentId: parentId, type: p.type === 'PJ' ? '工程' : 'タスク', order: sib + 1, name: f.name, vc: '', group: '', dept: '', kakari: '', no: '', goal: '', leader: '',
+      assignees: p.edit === 'own' ? [me] : [], start: f.start || '', end: f.end || '', deadline: '', status: '未着手', progress: '', priority: '', quality: '', review: '', memo: '', addnessId: '',
+      updatedBy: me, updatedAt: now, edit: p.edit || 'member', pjId: p.pjId || p.id, members: [], createdBy: me, canAdd: true });
+    recompute(); render();
+  }
+  return call('addChild', { id: id, parentId: parentId, name: f.name, start: f.start || '', end: f.end || '' });
+}
 // サーバーと同じ計算（子から親へ：日付・進捗・状態・遅れ）を画面側でもする
 function recompute() {
   var list = S.st.items, today = S.st.today, kidsOf = {}, res = {};
@@ -768,7 +784,7 @@ function bindGantt(el, pj, cols) {
   $('g-open').onclick = function () { descAll(pj.id).forEach(function (i) { S.exp[i.id] = true; }); renderGantt(el); };
   $('g-close').onclick = function () { descAll(pj.id).forEach(function (i) { S.exp[i.id] = false; }); renderGantt(el); };
   if ($('g-edit')) $('g-edit').onclick = function () { pjForm(pj.vc, pj); };
-  if ($('g-add')) $('g-add').onclick = function () { call('addChild', { parentId: pj.id, name: '新しい工程' }); };
+  if ($('g-add')) $('g-add').onclick = function () { quickAdd(pj.id, { name: '新しい工程' }); };
   if ($('g-del')) $('g-del').onclick = function () { if (confirm('「' + pj.name + '」を消します。中の工程・タスクも全部消えます。よろしいですか？')) call('deleteItem', { id: pj.id }).then(function () { S.pjId = ''; }); };
   if ($('g-links')) $('g-links').onclick = function () { linkForm(pj); };
   if ($('g-members')) $('g-members').onclick = function () { pjMembersForm(pj); };
@@ -796,7 +812,7 @@ function bindGantt(el, pj, cols) {
     b.onclick = function (e) {
       e.stopPropagation();
       var id = b.dataset.id, a = b.dataset.a, it = byId(id);
-      if (a === 'add') { S.exp[id] = true; call('addChild', { parentId: id, name: '新しいタスク', start: it.c.start || S.st.today, end: it.c.end || S.st.today }); }
+      if (a === 'add') { S.exp[id] = true; quickAdd(id, { name: '新しいタスク', start: it.c.start || S.st.today, end: it.c.end || S.st.today }); }
       if (a === 'up' || a === 'down') call('moveItem', { id: id, dir: a });
       if (a === 'del' && confirm('「' + it.name + '」' + (kids(id).length ? 'と、その下の行を全部' : '') + '消します。よろしいですか？')) call('deleteItem', { id: id });
       if (a === 'detail') detailForm(it);

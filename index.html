@@ -204,8 +204,12 @@ var S = { token: null, viewAs: '', st: null, tab: 'vc', vcSel: null, pjId: '', e
 var API_URL = 'https://script.google.com/macros/s/AKfycbyNA5O0s4jwjpHnBVf3sAT9i8cENFDI7V0Ofxb6LqxHrEhun5kBOdvF7vQNneLxsae0/exec';
 try { S.token = localStorage.getItem('pjv_token') || sessionStorage.getItem('pjv_token'); } catch (e) { }
 function saveToken(t, remember) {
-  try { localStorage.removeItem('pjv_token'); sessionStorage.removeItem('pjv_token'); if (t) (remember ? localStorage : sessionStorage).setItem('pjv_token', t); } catch (e) { }
+  try { ['pjv_token', 'pjv_snap'].forEach(function (k) { localStorage.removeItem(k); sessionStorage.removeItem(k); }); if (t) (remember ? localStorage : sessionStorage).setItem('pjv_token', t); } catch (e) { }
 }
+// 前回の画面を手元に覚えておき、開いた瞬間はそれを出す（最新は裏で読み込んで差し替える）
+function snapStore() { try { return localStorage.getItem('pjv_token') ? localStorage : sessionStorage; } catch (e) { return null; } }
+function saveSnap(st) { try { var s = snapStore(); if (s && !S.viewAs) s.setItem('pjv_snap', JSON.stringify(st)); } catch (e) { } }
+function loadSnap() { try { var s = snapStore(), j = s && s.getItem('pjv_snap'); return j ? JSON.parse(j) : null; } catch (e) { return null; } }
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function $(id) { return document.getElementById(id); }
@@ -239,7 +243,7 @@ function unzip(b64) {
   var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
   return new Response(stream).text().then(function (t) { return JSON.parse(t); });
 }
-function setState(st) { S.st = st; recompute(); }
+function setState(st, fromSnap) { S.st = st; recompute(); if (!fromSnap) { S.stale = false; saveSnap(st); } }
 function busy(on) { $('busy').classList.toggle('hidden', !on); }
 var toastT;
 function toast(msg, err) {
@@ -299,8 +303,8 @@ function refreshAfterFail() {
 function savingBadge() {
   var el = $('saving'); if (!el) return;
   var n = wq.length + (wqBusy ? 1 : 0);
-  el.textContent = n ? '保存中…（' + n + '件）' : '保存済み';
-  el.className = 'savebadge' + (n ? ' on' : '');
+  el.textContent = n ? '保存中…（' + n + '件）' : S.stale ? '最新を読み込み中…' : '保存済み';
+  el.className = 'savebadge' + (n || S.stale ? ' on' : '');
 }
 // 状態・日付・進捗などは、押した瞬間に画面に反映してから裏で保存する
 function quickUpdate(id, fields) {
@@ -949,7 +953,7 @@ function pjForm(vc, pj) {
     }
     p.deadline = undec ? '' : dl;
     if (!p.no) delete p.no;
-    return call('updateItem', { id: pj.id, fields: p });
+    quickUpdate(pj.id, p); return true;
   }, isNew ? 'PJを作る' : '保存');
   $('f-dept').onchange = function () { $('f-kakari').innerHTML = '<option value=""></option>' + kakariOf(this.value).map(function (k) { return '<option>' + esc(k) + '</option>'; }).join(''); };
 }
@@ -967,7 +971,11 @@ function pjMembersForm(pj) {
   function row(m) { return '<label><input type="checkbox" class="pm" value="' + esc(m.email) + '"' + (cur.indexOf(m.email) >= 0 ? ' checked' : '') + '><span>' + esc(m.name) + ' <span class="muted">' + esc(m.role) + '・' + esc(m.outside ? m.group : m.depts.join('、')) + '</span></span></label>'; }
   var body = '<p class="muted">このPJの課（' + esc(pj.dept) + '）以外の人や、外部企業の人を入れます。入った人は、このPJを見られて、工程・タスクを入力できます（PJの情報を直す・PJを消すことはできません）。</p>' +
     '<div class="checks">' + (outside.length ? '<div class="gl">外部企業</div>' + outside.map(row).join('') : '') + '<div class="gl">社内</div>' + inside.map(row).join('') + '</div>';
-  modal('PJメンバー：' + pj.name, body, function () { return call('setPjMembers', { pjId: pj.id, emails: checked('pm') }); });
+  modal('PJメンバー：' + pj.name, body, function () {
+    var emails = checked('pm'), it = byId(pj.id);
+    if (it) { it.members = emails; render(); }
+    call('setPjMembers', { pjId: pj.id, emails: emails }); return true;
+  });
 }
 function bnForm(b, vc, sub) {
   var st = S.st, isNew = !b;
@@ -1025,7 +1033,11 @@ function memberForm(m) {
 }
 
 // ---------- 起動 ----------
-if (S.token) call('state'); else renderLogin();
+if (S.token) {
+  var snap = loadSnap();
+  if (snap) { S.stale = true; setState(snap, true); render(); }
+  call('state');
+} else renderLogin();
 </script>
 </body>
 </html>
